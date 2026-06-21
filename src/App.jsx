@@ -167,11 +167,7 @@ export default function App() {
     }
   }, [captions, isStateRestored]);
 
-  useEffect(() => {
-    if (isStateRestored) {
-      localforage.setItem('sonex_videoFile', videoFile);
-    }
-  }, [videoFile, isStateRestored]);
+
   const [extractionMethod, setExtractionMethod] = useState('extract'); // 'extract' or 'direct'
   const [selectedModel, setSelectedModel] = useState('whisper-large-v3'); // 'whisper-large-v3' or 'whisper-large-v3-turbo'
   const [isProcessing, setIsProcessing] = useState(false);
@@ -205,6 +201,7 @@ export default function App() {
     const file = e.target.files[0];
     if (file) {
       setVideoFile(file);
+      localforage.setItem('sonex_videoFile', file);
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
       setCaptions([]);
@@ -226,6 +223,7 @@ export default function App() {
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('video/')) {
       setVideoFile(file);
+      localforage.setItem('sonex_videoFile', file);
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
       setCaptions([]);
@@ -597,10 +595,8 @@ export default function App() {
       <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-500 text-black p-2 rounded-xl shadow-lg shadow-emerald-500/20">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
-              </svg>
+            <div className="flex-shrink-0 overflow-hidden rounded-xl shadow-lg shadow-emerald-500/10">
+              <img src="/logo.png" alt="Sonex Logo" className="w-10 h-10 object-cover" />
             </div>
             <div>
               <h1 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
