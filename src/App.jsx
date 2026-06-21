@@ -306,14 +306,53 @@ export default function App() {
         throw new Error("Groq API succeeded but did not return any time-segmented transcription blocks.");
       }
 
-      // Convert Groq segments directly into structured SRT formats
-      const parsed = resJson.segments.map((seg, index) => ({
+      // Post-process to break long segments into short chunks for Shorts/Reels format
+      let refinedSegments = [];
+      resJson.segments.forEach(seg => {
+        let text = seg.text.trim();
+        if (!text) return;
+        
+        // Split by standard punctuation to keep ideas grouped
+        const chunks = text.match(/(.*?[，。？！,.?!；;]+|.+)/g) || [text];
+        
+        const finalChunks = [];
+        chunks.forEach(chunk => {
+          let c = chunk.trim();
+          if (!c) return;
+          // Split long chunks > 18 characters (great for Chinese and English shorts)
+          while (c.length > 18) {
+             let splitIdx = 18;
+             const spaceIdx = c.lastIndexOf(' ', 18);
+             if (spaceIdx > 10) splitIdx = spaceIdx; // split at space if available
+             finalChunks.push(c.substring(0, splitIdx).trim());
+             c = c.substring(splitIdx).trim();
+          }
+          if (c) finalChunks.push(c);
+        });
+
+        const totalChars = finalChunks.reduce((acc, c) => acc + c.length, 0);
+        const duration = seg.end - seg.start;
+        let currentTime = seg.start;
+
+        finalChunks.forEach(chunk => {
+          const chunkDuration = totalChars > 0 ? (chunk.length / totalChars) * duration : duration;
+          refinedSegments.push({
+            start: currentTime,
+            end: currentTime + chunkDuration,
+            text: chunk
+          });
+          currentTime += chunkDuration;
+        });
+      });
+
+      // Convert segments directly into structured SRT formats
+      const parsed = refinedSegments.map((seg, index) => ({
         id: index + 1,
         startTime: seg.start,
         endTime: seg.end,
         startStr: secondsToTimeStr(seg.start),
         endStr: secondsToTimeStr(seg.end),
-        text: seg.text.trim()
+        text: seg.text
       }));
 
       setCaptions(parsed);
