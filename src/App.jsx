@@ -534,7 +534,9 @@ export default function App() {
       setProcessStep("Preparing video & subtitles in virtual file system...");
       setProcessProgress(15);
 
-      await ffmpeg.writeFile('input.mp4', await fetchFile(videoFile));
+      const ext = videoFile.name ? videoFile.name.split('.').pop() : 'mp4';
+      const inputName = `input.${ext}`;
+      await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
       
       const srtContent = formatSRT(captions);
       const srtBlob = new Blob([srtContent], { type: 'text/plain' });
@@ -542,20 +544,29 @@ export default function App() {
 
       setProcessStep("Loading Chinese font package...");
       const fontResponse = await fetch('/font.ttf');
+      if (!fontResponse.ok) throw new Error("Could not load font file from server.");
       const fontBlob = await fontResponse.blob();
       await ffmpeg.writeFile('font.ttf', await fetchFile(fontBlob));
 
       setProcessStep("Rendering video! (This may take a few minutes)...");
       setProcessProgress(20);
 
-      await ffmpeg.exec([
-        '-i', 'input.mp4',
-        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans CJK SC,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
+      ffmpeg.on('log', ({ message }) => {
+        console.log('[FFmpeg]', message);
+      });
+
+      const execCode = await ffmpeg.exec([
+        '-i', inputName,
+        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
         '-c:v', 'libx264',
         '-preset', 'fast',
-        '-c:a', 'copy',
+        '-c:a', 'aac',
         'output.mp4'
       ]);
+
+      if (execCode !== 0) {
+        throw new Error(`FFmpeg processing failed (code ${execCode}). See console for details.`);
+      }
 
       setProcessStep("Finalizing video export...");
       setProcessProgress(99);
@@ -576,7 +587,8 @@ export default function App() {
       showFeedback('success', 'Video successfully rendered and downloaded!');
     } catch (err) {
       console.error(err);
-      showFeedback('error', 'Failed to burn subtitles: ' + err.message);
+      const errMsg = err?.message || (typeof err === 'string' ? err : 'Unknown FFmpeg execution error');
+      showFeedback('error', 'Failed to burn subtitles: ' + errMsg);
     } finally {
       setIsProcessing(false);
       setProcessStep('');
