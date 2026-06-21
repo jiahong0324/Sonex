@@ -103,7 +103,7 @@ function getWrappedText(text) {
   // Clean up any weird double spaces or existing newlines
   const cleanText = text.replace(/\s+/g, ' ').trim();
   
-  const limit = 24; // Max characters per line before forcing a clean newline
+  const limit = 26; // Max characters per line before forcing a clean newline
   if (cleanText.length <= limit) return cleanText;
 
   const hasChinese = /[\u4e00-\u9fa5]/.test(cleanText);
@@ -391,7 +391,7 @@ export default function App() {
           let c = chunk.trim();
           if (!c) return;
           const hasChinese = /[\u4e00-\u9fa5]/.test(c);
-          const maxLen = hasChinese ? 14 : 24; // Chinese stays short, English allows more words per line
+          const maxLen = hasChinese ? 14 : 26; // Increased English limit to allow more words per line
           
           if (c.length <= maxLen) {
             if (c) finalChunks.push(c);
@@ -611,7 +611,7 @@ export default function App() {
       // Burn the subtitles directly into the video frames (hard subs)
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1.8,Shadow=2.5,BackColour=&H00000000,MarginV=90,Alignment=2,FontSize=24,Bold=1'",
+        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1.8,Shadow=2.5,BackColour=&H00000000,MarginV=85,Alignment=2,FontSize=24,Bold=1'",
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'copy',
@@ -959,7 +959,7 @@ export default function App() {
                     }}
                   >
                     <div className={`absolute left-4 right-4 text-center drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
-                      isFullscreen ? 'bottom-40 md:bottom-48' : 'bottom-32 md:bottom-40'
+                      isFullscreen ? 'bottom-40 md:bottom-48' : 'bottom-36 md:bottom-40'
                     }`}>
                       {captions.map((cap) => {
                         if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
