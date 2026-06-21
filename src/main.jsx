@@ -4,7 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { registerSW } from 'virtual:pwa-register'
 
-const updateSW = registerSW({
+registerSW({
   onNeedRefresh() {
     // Show a prompt to user if needed
   },

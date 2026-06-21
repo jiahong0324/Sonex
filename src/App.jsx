@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import localforage from 'localforage';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 // --- Global Config & Helpers ---
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'sonex-caption-gen';
 
 // Standard PCM WAV encoder to convert decoded browser AudioBuffer to 16kHz mono WAV
 function bufferToWav(buffer) {
@@ -64,15 +63,6 @@ function bufferToWav(buffer) {
   return new Blob([view], { type: 'audio/wav' });
 }
 
-// Convert "HH:MM:SS,mmm" or "HH:MM:SS.mmm" to seconds
-function timeToSeconds(timeStr) {
-  const parts = timeStr.replace(',', '.').split(':');
-  if (parts.length < 3) return 0;
-  const hours = parseInt(parts[0], 10);
-  const minutes = parseInt(parts[1], 10);
-  const seconds = parseFloat(parts[2]);
-  return hours * 3600 + minutes * 60 + seconds;
-}
 
 // Convert seconds back to "HH:MM:SS,mmm" formatted exactly for CapCut
 function secondsToTimeStr(seconds) {
@@ -277,7 +267,7 @@ export default function App() {
       return wavBlob;
     } catch (err) {
       console.error(err);
-      throw new Error("Client-side video audio decoding failed. Please use a smaller clip or try direct upload.");
+      throw new Error("Client-side video audio decoding failed. Please use a smaller clip or try direct upload.", { cause: err });
     }
   };
 

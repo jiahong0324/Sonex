@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       workbox: {
-        maximumFileSizeToCacheInBytes: 50000000 // 50MB to allow caching ffmpeg-core.wasm and font.ttf
+        globIgnores: ['**/ffmpeg-core.wasm', '**/font.ttf', '**/ffmpeg-core.js']
       },
       manifest: {
         name: 'Sonex Caption Master',
