@@ -611,7 +611,7 @@ export default function App() {
       // Burn the subtitles directly into the video frames (hard subs)
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1.8,Shadow=2.5,BackColour=&H00000000,MarginV=30,Alignment=2,FontSize=24,Bold=1'",
+        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1.8,Shadow=2.5,BackColour=&H00000000,MarginV=60,Alignment=2,FontSize=24,Bold=1'",
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'copy',
@@ -959,7 +959,7 @@ export default function App() {
                     }}
                   >
                     <div className={`absolute left-4 right-4 text-center drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
-                      isFullscreen ? 'bottom-20 md:bottom-28' : 'bottom-16 md:bottom-20'
+                      isFullscreen ? 'bottom-32 md:bottom-40' : 'bottom-28 md:bottom-32'
                     }`}>
                       {captions.map((cap) => {
                         if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
