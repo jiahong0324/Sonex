@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import localforage from 'localforage';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 // --- Global Config & Helpers ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'sonex-caption-gen';
@@ -144,12 +147,46 @@ export default function App() {
   const [saveKey, setSaveKey] = useState(true);
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState('');
+  const [captions, setCaptions] = useState([]);
+  const [isStateRestored, setIsStateRestored] = useState(false);
+
+  // Restore state from IndexedDB on mount
+  useEffect(() => {
+    async function restoreState() {
+      try {
+        const storedCaptions = await localforage.getItem('sonex_captions');
+        if (storedCaptions) setCaptions(storedCaptions);
+
+        const storedFile = await localforage.getItem('sonex_videoFile');
+        if (storedFile) {
+          setVideoFile(storedFile);
+          setVideoUrl(URL.createObjectURL(storedFile));
+        }
+      } catch (err) {
+        console.error('Failed to restore offline state', err);
+      }
+      setIsStateRestored(true);
+    }
+    restoreState();
+  }, []);
+
+  // Auto-save state changes
+  useEffect(() => {
+    if (isStateRestored) {
+      localforage.setItem('sonex_captions', captions);
+    }
+  }, [captions, isStateRestored]);
+
+  useEffect(() => {
+    if (isStateRestored) {
+      localforage.setItem('sonex_videoFile', videoFile);
+    }
+  }, [videoFile, isStateRestored]);
   const [extractionMethod, setExtractionMethod] = useState('extract'); // 'extract' or 'direct'
   const [selectedModel, setSelectedModel] = useState('whisper-large-v3'); // 'whisper-large-v3' or 'whisper-large-v3-turbo'
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
   const [processProgress, setProcessProgress] = useState(0);
-  const [captions, setCaptions] = useState([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [timeOffset, setTimeOffset] = useState(0);
@@ -455,6 +492,79 @@ export default function App() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showFeedback('success', 'SRT Captions file successfully generated and saved!');
+  };
+
+  // Burn subtitles into video directly using FFmpeg.wasm
+  const handleBurnSubtitles = async () => {
+    if (!videoFile || captions.length === 0) return;
+    setIsProcessing(true);
+    setProcessStep("Loading FFmpeg Video Engine...");
+    setProcessProgress(5);
+
+    try {
+      const ffmpeg = new FFmpeg();
+      
+      ffmpeg.on('progress', ({ progress }) => {
+        setProcessProgress(Math.max(10, Math.floor(progress * 100)));
+      });
+
+      // Load single-threaded core
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+      });
+
+      setProcessStep("Preparing video & subtitles in virtual file system...");
+      setProcessProgress(15);
+
+      await ffmpeg.writeFile('input.mp4', await fetchFile(videoFile));
+      
+      const srtContent = formatSRT(captions);
+      const srtBlob = new Blob([srtContent], { type: 'text/plain' });
+      await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
+
+      setProcessStep("Loading Chinese font package...");
+      const fontResponse = await fetch('/font.ttf');
+      const fontBlob = await fontResponse.blob();
+      await ffmpeg.writeFile('font.ttf', await fetchFile(fontBlob));
+
+      setProcessStep("Rendering video! (This may take a few minutes)...");
+      setProcessProgress(20);
+
+      await ffmpeg.exec([
+        '-i', 'input.mp4',
+        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans CJK SC,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-c:a', 'copy',
+        'output.mp4'
+      ]);
+
+      setProcessStep("Finalizing video export...");
+      setProcessProgress(99);
+
+      const data = await ffmpeg.readFile('output.mp4');
+      const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+      const exportUrl = URL.createObjectURL(videoBlob);
+      
+      const a = document.createElement('a');
+      a.href = exportUrl;
+      const cleanName = videoFile.name ? videoFile.name.substring(0, videoFile.name.lastIndexOf('.')) : 'export';
+      a.download = `${cleanName}_Subtitled.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(exportUrl);
+
+      showFeedback('success', 'Video successfully rendered and downloaded!');
+    } catch (err) {
+      console.error(err);
+      showFeedback('error', 'Failed to burn subtitles: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+      setProcessStep('');
+    }
   };
 
   // Highlight matches in list
@@ -772,16 +882,28 @@ export default function App() {
             
             {/* Download SRT Button block */}
             {captions.length > 0 ? (
-              <button
-                type="button"
-                onClick={handleDownloadSRT}
-                className="w-full py-4 px-6 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-black font-extrabold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/20 transition-all text-base animate-pulse"
-              >
-                <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download SRT for Sonex
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadSRT}
+                  className="w-full py-4 px-6 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-black font-extrabold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/20 transition-all text-base animate-pulse"
+                >
+                  <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download SRT File
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBurnSubtitles}
+                  className="w-full py-3 px-6 bg-zinc-800 hover:bg-zinc-700 active:scale-[0.99] text-white font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 transition-all text-sm border border-zinc-700"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Burn Subtitles & Download Video
+                </button>
+              </div>
             ) : (
               <div className="p-4 bg-zinc-950 border border-dashed border-zinc-800 rounded-xl text-center text-xs text-zinc-500">
                 No captions generated yet. Fill in your API Key and upload a video to generate captions.
