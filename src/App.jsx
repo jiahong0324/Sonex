@@ -64,7 +64,7 @@ function bufferToWav(buffer) {
 }
 
 
-// Convert seconds back to "HH:MM:SS,mmm" formatted exactly for CapCut
+// Convert seconds back to "HH:MM:SS,mmm" formatted exactly
 function secondsToTimeStr(seconds) {
   if (seconds < 0) seconds = 0;
   const hours = Math.floor(seconds / 3600);
@@ -80,7 +80,7 @@ function secondsToTimeStr(seconds) {
   return `${h}:${m}:${s},${msStr}`;
 }
 
-// Formatter to recreate CapCut ready SRT
+// Formatter to recreate SRT
 function formatSRT(captions) {
   return captions
     .map((cap, index) => {
@@ -303,7 +303,7 @@ export default function App() {
         throw new Error("The target file exceeds the 25MB hard limit. Please check 'Extract audio client-side' or upload a smaller file.");
       }
 
-      setProcessStep("Connecting and sending audio payload to AI API...");
+      setProcessStep("Connecting and sending audio payload to API...");
       setProcessProgress(50);
 
       const formData = new FormData();
@@ -322,15 +322,15 @@ export default function App() {
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `AI API responded with code: ${response.status}`);
+        throw new Error(errJson.error?.message || `API responded with code: ${response.status}`);
       }
 
-      setProcessStep("Processing output returned from AI API...");
+      setProcessStep("Processing output returned from API...");
       setProcessProgress(90);
 
       const resJson = await response.json();
       if (!resJson.segments || !Array.isArray(resJson.segments)) {
-        throw new Error("AI API succeeded but did not return any time-segmented transcription blocks.");
+        throw new Error("API succeeded but did not return any time-segmented transcription blocks.");
       }
 
       // Post-process to break long segments into short chunks for Shorts/Reels format
@@ -600,9 +600,9 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                Sonex Caption Master <span className="text-xs bg-zinc-800 text-zinc-400 font-medium px-2 py-0.5 rounded-full border border-zinc-700">AI Engine</span>
+                Sonex Caption Master
               </h1>
-              <p className="text-xs text-zinc-400">Generate, customize & clean up video speech captions instantaneously using AI</p>
+              <p className="text-xs text-zinc-400">Generate, customize & clean up video speech captions instantaneously</p>
             </div>
           </div>
           
@@ -634,7 +634,7 @@ export default function App() {
                   <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                  1. AI API Authorization
+                  1. API Authorization
                 </h2>
                 <label className="flex items-center gap-2 text-xs text-zinc-500 cursor-pointer">
                   <input 
@@ -765,7 +765,7 @@ export default function App() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Generate Captions using AI
+                  Generate Captions
                 </button>
               ) : (
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-800 rounded-xl mt-4">
@@ -782,7 +782,7 @@ export default function App() {
                     />
                   </div>
                   <p className="text-[10px] text-zinc-500 text-center italic">
-                    Note: Audio transcription takes roughly 2-5 seconds on the AI server. Keep this page open.
+                    Note: Audio transcription takes roughly 2-5 seconds on the server. Keep this page open.
                   </p>
                 </div>
               )}
@@ -848,7 +848,7 @@ export default function App() {
           {/* Quick instructions / tips box */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 space-y-3">
             <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-              Pro workflow for Sonex / CapCut:
+              Pro workflow for Sonex:
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-zinc-400">
               <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
@@ -861,7 +861,7 @@ export default function App() {
               </div>
               <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
                 <div className="text-zinc-300 font-bold mb-1">Step 3</div>
-                In CapCut: Go to <span className="text-zinc-200 font-semibold">Text</span> &rarr; <span className="text-zinc-200 font-semibold">Local Captions</span>.
+                In your video editor: Go to <span className="text-zinc-200 font-semibold">Text</span> &rarr; <span className="text-zinc-200 font-semibold">Local Captions</span>.
               </div>
               <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
                 <div className="text-zinc-300 font-bold mb-1">Step 4</div>
@@ -1121,7 +1121,7 @@ export default function App() {
       
       {/* Footer Info */}
       <footer className="border-t border-zinc-900 bg-zinc-950 py-8 text-center text-xs text-zinc-600 mt-12 space-y-1">
-        <p>Built exclusively for rapid video subtitling workflows. All formatting matches exact CapCut local text importing engines.</p>
+        <p>Built exclusively for rapid video subtitling workflows. All formatting matches exact local text importing engines.</p>
         <p>&copy; 2026 Sonex Workspace. Local offline audio extraction.</p>
       </footer>
     </div>
