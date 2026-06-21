@@ -193,6 +193,7 @@ export default function App() {
   const [editCapId, setEditCapId] = useState(null);
   const [editText, setEditText] = useState('');
   const [feedback, setFeedback] = useState({ type: '', msg: '' });
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const videoRef = useRef(null);
   const listContainerRef = useRef(null);
@@ -444,6 +445,30 @@ export default function App() {
     setCaptions(prev => prev.map(cap => cap.id === id ? { ...cap, text: editText } : cap));
     setEditCapId(null);
   };
+
+  // Fix native fullscreen hijacking
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!document.fullscreenElement;
+      setIsFullscreen(isFs);
+
+      if (document.fullscreenElement === videoRef.current) {
+        document.exitFullscreen().then(() => {
+          if (playerContainerRef.current) {
+            playerContainerRef.current.requestFullscreen();
+          }
+        }).catch(e => console.error(e));
+      }
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // Auto scroll caption list with video playing status
   useEffect(() => {
@@ -783,7 +808,7 @@ export default function App() {
                 </svg>
                 Media Preview & Player
               </h3>
-              <div ref={playerContainerRef} className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800 group">
+              <div ref={playerContainerRef} className={`relative rounded-xl overflow-hidden bg-black border border-zinc-800 group ${isFullscreen ? 'w-full h-full flex flex-col justify-center' : 'aspect-video'}`}>
                 <video
                   ref={videoRef}
                   src={videoUrl}
@@ -802,7 +827,7 @@ export default function App() {
                       playerContainerRef.current.requestFullscreen();
                     }
                   }}
-                  className="absolute top-4 right-4 bg-black/60 hover:bg-black text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
+                  className="absolute top-4 right-4 bg-black/70 hover:bg-black text-white p-2 rounded-lg transition-opacity z-10 shadow-lg"
                   title="Fullscreen with Captions"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
