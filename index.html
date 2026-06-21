@@ -1,14 +1,30 @@
 <!doctype html>
-<html lang="en" class="bg-zinc-950 overscroll-none">
+<html lang="en" style="background-color: #09090b; overscroll-behavior: none;">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=0" />
     <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="description" content="Sonex Caption Master - Generate, customize & clean up video speech captions instantaneously using AI">
     <title>Sonex Caption Master</title>
+    <style>
+      html, body {
+        background-color: #09090b !important;
+        overscroll-behavior: none !important;
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #root {
+        background-color: #09090b;
+      }
+    </style>
   </head>
-  <body class="bg-zinc-950 overscroll-none">
+  <body style="background-color: #09090b; overscroll-behavior: none;">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

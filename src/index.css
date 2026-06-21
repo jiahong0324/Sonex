@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html, body {
+    background-color: #09090b !important;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: auto;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  #root {
+    min-height: 100%;
+    background-color: #09090b;
+  }
+}
+
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
