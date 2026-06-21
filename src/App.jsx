@@ -336,11 +336,17 @@ export default function App() {
 
         finalChunks.forEach(chunk => {
           const chunkDuration = totalChars > 0 ? (chunk.length / totalChars) * duration : duration;
-          refinedSegments.push({
-            start: currentTime,
-            end: currentTime + chunkDuration,
-            text: chunk
-          });
+          
+          // Clean up the text by stripping ending punctuation (looks much nicer on short videos)
+          const cleanText = chunk.replace(/[，。？！,.?!；;]+$/, '').trim();
+          
+          if (cleanText) {
+            refinedSegments.push({
+              start: currentTime,
+              end: currentTime + chunkDuration,
+              text: cleanText
+            });
+          }
           currentTime += chunkDuration;
         });
       });
