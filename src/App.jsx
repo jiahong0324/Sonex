@@ -103,18 +103,29 @@ function formatSRT(captions) {
       const lines = cap.text.split('\n');
       const formattedLines = [];
       for (let line of lines) {
-        if (line.length > 42) {
-          const words = line.split(' ');
-          let currentLine = '';
-          for (let word of words) {
-            if ((currentLine + ' ' + word).trim().length <= 42) {
-              currentLine = (currentLine + ' ' + word).trim();
-            } else {
-              if (currentLine) formattedLines.push(currentLine);
-              currentLine = word;
+        const hasChinese = /[\u4e00-\u9fa5]/.test(line);
+        const limit = hasChinese ? 16 : 42;
+        
+        if (line.length > limit) {
+          if (hasChinese || !line.includes(' ')) {
+            let currentLine = '';
+            for (let i = 0; i < line.length; i += limit) {
+              currentLine += line.substring(i, i + limit) + '\n';
             }
+            formattedLines.push(currentLine.trim());
+          } else {
+            const words = line.split(' ');
+            let currentLine = '';
+            for (let word of words) {
+              if ((currentLine + ' ' + word).trim().length <= limit) {
+                currentLine = (currentLine + ' ' + word).trim();
+              } else {
+                if (currentLine) formattedLines.push(currentLine);
+                currentLine = word;
+              }
+            }
+            if (currentLine) formattedLines.push(currentLine);
           }
-          if (currentLine) formattedLines.push(currentLine);
         } else {
           formattedLines.push(line);
         }
@@ -394,14 +405,37 @@ export default function App() {
       });
 
       // Convert segments directly into structured SRT formats
-      const parsed = refinedSegments.map((seg, index) => ({
-        id: index + 1,
-        startTime: seg.start,
-        endTime: seg.end,
-        startStr: secondsToTimeStr(seg.start),
-        endStr: secondsToTimeStr(seg.end),
-        text: seg.text
-      }));
+      const parsed = refinedSegments.map((seg, index) => {
+        let text = seg.text;
+        const hasChinese = /[\u4e00-\u9fa5]/.test(text);
+        
+        // Auto-wrap to a second line if there are too many words
+        if (hasChinese && text.length > 12 && !text.includes('\n')) {
+          const mid = Math.ceil(text.length / 2);
+          text = text.substring(0, mid) + '\n' + text.substring(mid);
+        } else if (!hasChinese && text.length > 25 && !text.includes('\n')) {
+          const words = text.split(' ');
+          let line1 = '';
+          let line2 = '';
+          for (let w of words) {
+              if ((line1 + w).length <= 25 || !line1) {
+                  line1 += w + ' ';
+              } else {
+                  line2 += w + ' ';
+              }
+          }
+          text = line1.trim() + (line2 ? '\n' + line2.trim() : '');
+        }
+
+        return {
+          id: index + 1,
+          startTime: seg.start,
+          endTime: seg.end,
+          startStr: secondsToTimeStr(seg.start),
+          endStr: secondsToTimeStr(seg.end),
+          text: text
+        };
+      });
 
       setCaptions(parsed);
       setProcessProgress(100);
