@@ -100,7 +100,7 @@ function getWrappedText(text) {
   if (!text) return text;
   return text.split('\n').map(line => {
     const hasChinese = /[\u4e00-\u9fa5]/.test(line);
-    const limit = hasChinese ? 18 : 35; // Default to 1 line, only break if extremely long
+    const limit = hasChinese ? 14 : 25; // 14 chars for Chinese is the sweet spot: keeps short sentences on 1 line, wraps long ones
     if (line.length <= limit) return line;
 
     const formattedLines = [];
