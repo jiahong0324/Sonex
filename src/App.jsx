@@ -5,15 +5,14 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 // --- Global Config & Helpers ---
 
-// Helper for creating a perfectly smooth, thick text shadow without jagged edges
 const createSmoothOutline = (thickness, color) => {
-  const steps = 36;
+  const steps = 64;
   const arr = [];
   for (let i = 0; i < steps; i++) {
     const theta = (i * 2 * Math.PI) / steps;
     const x = (thickness * Math.cos(theta)).toFixed(2);
     const y = (thickness * Math.sin(theta)).toFixed(2);
-    arr.push(`${x}px ${y}px 0 ${color}`);
+    arr.push(`${x}px ${y}px 1.2px ${color}`);
   }
   return arr.join(', ');
 };
