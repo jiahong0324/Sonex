@@ -530,11 +530,7 @@ export default function App() {
       const srtBlob = new Blob([srtContent], { type: 'text/plain' });
       await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
 
-      setProcessStep("Loading Chinese font package...");
-      const fontResponse = await fetch('/font.ttf');
-      if (!fontResponse.ok) throw new Error("Could not load font file from server.");
-      const fontBlob = await fontResponse.blob();
-      await ffmpeg.writeFile('font.ttf', await fetchFile(fontBlob));
+      // Soft captions export doesn't require font loading
 
       setProcessStep("Rendering social media ready video...");
       setProcessProgress(20);
