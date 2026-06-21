@@ -100,19 +100,21 @@ function getWrappedText(text) {
   if (!text) return text;
   return text.split('\n').map(line => {
     const hasChinese = /[\u4e00-\u9fa5]/.test(line);
-    const limit = hasChinese ? 13 : 26; // Break roughly at 12-14 chars for Chinese, 26 for English
+    const limit = hasChinese ? 10 : 20; // Break aggressively at 10 chars for Chinese, 20 for English for vertical videos
     if (line.length <= limit) return line;
 
     const formattedLines = [];
-    if (hasChinese || !line.includes(' ')) {
+    if (hasChinese) {
       // Split evenly into 2 lines for best aesthetic, or more if extremely long
-      if (line.length <= limit * 2) {
-        const mid = Math.ceil(line.length / 2);
-        formattedLines.push(line.substring(0, mid));
-        formattedLines.push(line.substring(mid));
+      // Clean up whitespace to prevent edge cases
+      const cleanLine = line.trim();
+      if (cleanLine.length <= limit * 2) {
+        const mid = Math.ceil(cleanLine.length / 2);
+        formattedLines.push(cleanLine.substring(0, mid));
+        formattedLines.push(cleanLine.substring(mid));
       } else {
-        for (let i = 0; i < line.length; i += limit) {
-          formattedLines.push(line.substring(i, i + limit));
+        for (let i = 0; i < cleanLine.length; i += limit) {
+          formattedLines.push(cleanLine.substring(i, i + limit));
         }
       }
     } else {
