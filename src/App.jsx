@@ -530,13 +530,7 @@ export default function App() {
       const srtBlob = new Blob([srtContent], { type: 'text/plain' });
       await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
 
-      setProcessStep("Loading Chinese font package...");
-      const fontResponse = await fetch('/font.ttf');
-      if (!fontResponse.ok) throw new Error("Could not load font file from server.");
-      const fontBlob = await fontResponse.blob();
-      await ffmpeg.writeFile('font.ttf', await fetchFile(fontBlob));
-
-      setProcessStep("Rendering video! (This may take a few minutes)...");
+      setProcessStep("Embedding subtitles into video container...");
       setProcessProgress(20);
 
       ffmpeg.on('log', ({ message }) => {
@@ -545,10 +539,9 @@ export default function App() {
 
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-c:a', 'copy',
+        '-i', 'subs.srt',
+        '-c', 'copy',
+        '-c:s', 'mov_text',
         'output.mp4'
       ]);
 
@@ -576,7 +569,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Unknown FFmpeg execution error');
-      showFeedback('error', 'Failed to burn subtitles: ' + errMsg);
+      showFeedback('error', 'Failed to embed subtitles: ' + errMsg);
     } finally {
       setIsProcessing(false);
       setProcessStep('');
@@ -927,12 +920,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleBurnSubtitles}
-                  className="group w-full py-3.5 px-6 bg-zinc-900/80 hover:bg-zinc-800 active:scale-[0.98] text-zinc-300 font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 transition-all duration-300 text-sm border border-zinc-700/50 hover:border-zinc-500 hover:text-white shadow-lg hover:-translate-y-0.5"
+                  className="group relative w-full py-3.5 px-6 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 active:scale-[0.98] text-white font-extrabold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(99,102,241,0.25)] hover:shadow-[0_0_30px_rgba(99,102,241,0.4)] transition-all duration-300 transform hover:-translate-y-0.5 text-base overflow-hidden border border-indigo-400/30"
                 >
-                  <svg className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
+                  <svg className="w-5 h-5 text-white/90 group-hover:text-white transition-colors duration-300 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  Burn Subtitles & Download Video
+                  <span className="relative z-10">Embed Subtitles & Download Video (Instant)</span>
                 </button>
               </div>
             ) : (
