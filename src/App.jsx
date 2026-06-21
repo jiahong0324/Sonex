@@ -545,7 +545,7 @@ export default function App() {
 
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans,FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Bold=1,MarginV=70'",
+        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans,FontSize=24,PrimaryColour=&H00000000,OutlineColour=&H00FFFFFF,BorderStyle=1,Outline=3,Shadow=2,Bold=1,MarginV=70'",
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'copy',
@@ -833,9 +833,9 @@ export default function App() {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className="text-white text-2xl md:text-3xl font-black inline-block max-w-[90%] md:max-w-2xl break-words whitespace-pre-wrap leading-snug tracking-wide"
+                                className="text-black text-2xl md:text-3xl font-black inline-block max-w-[90%] md:max-w-2xl break-words whitespace-pre-wrap leading-snug tracking-wide"
                                 style={{
-                                  WebkitTextStroke: '2px black',
+                                  WebkitTextStroke: '2.5px white',
                                   textShadow: '0px 3px 6px rgba(0,0,0,0.8)'
                                 }}>
                             {cap.text}
