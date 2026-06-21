@@ -5,6 +5,22 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 // --- Global Config & Helpers ---
 
+// Helper for creating a perfectly smooth, thick text shadow without jagged edges
+const createSmoothOutline = (thickness, color) => {
+  const steps = 36;
+  const arr = [];
+  for (let i = 0; i < steps; i++) {
+    const theta = (i * 2 * Math.PI) / steps;
+    const x = (thickness * Math.cos(theta)).toFixed(2);
+    const y = (thickness * Math.sin(theta)).toFixed(2);
+    arr.push(`${x}px ${y}px 0 ${color}`);
+  }
+  return arr.join(', ');
+};
+
+const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(4, '#fff');
+const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(3, '#fff');
+
 // Standard PCM WAV encoder to convert decoded browser AudioBuffer to 16kHz mono WAV
 function bufferToWav(buffer) {
   const numOfChan = buffer.numberOfChannels;
@@ -850,8 +866,8 @@ export default function App() {
                                 }`}
                                 style={{
                                   textShadow: isFullscreen
-                                    ? '0 3.5px 0 #fff, 0 -3.5px 0 #fff, 3.5px 0 0 #fff, -3.5px 0 0 #fff, 3.5px 3.5px 0 #fff, -3.5px -3.5px 0 #fff, 3.5px -3.5px 0 #fff, -3.5px 3.5px 0 #fff'
-                                    : '0 2.5px 0 #fff, 0 -2.5px 0 #fff, 2.5px 0 0 #fff, -2.5px 0 0 #fff, 2.5px 2.5px 0 #fff, -2.5px -2.5px 0 #fff, 2.5px -2.5px 0 #fff, -2.5px 2.5px 0 #fff'
+                                    ? SMOOTH_OUTLINE_FULLSCREEN
+                                    : SMOOTH_OUTLINE_NORMAL
                                 }}>
                             {cap.text}
                           </span>
