@@ -100,7 +100,7 @@ function getWrappedText(text) {
   if (!text) return text;
   // We no longer wrap to multiple lines automatically since we want a 1-line Reels style.
   // The chunker below handles breaking long text into multiple time segments instead.
-  return text.replace(/\n/g, ' ').trim();
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 // Formatter to recreate SRT
@@ -363,7 +363,7 @@ export default function App() {
           let c = chunk.trim();
           if (!c) return;
           const hasChinese = /[\u4e00-\u9fa5]/.test(c);
-          const maxLen = hasChinese ? 14 : 18; // Max characters before forcing a split into new time segments
+          const maxLen = 14; // Strictly set to 14 for both to guarantee it never exceeds video editor margins
           
           if (c.length <= maxLen) {
             if (c) finalChunks.push(c);
@@ -377,7 +377,7 @@ export default function App() {
               }
             } else {
               // English must be split exactly at word boundaries for Reels style
-              const words = c.split(' ');
+              const words = c.split(/\s+/);
               let currentChunk = '';
               for (let word of words) {
                 if ((currentChunk + ' ' + word).trim().length <= maxLen) {
@@ -923,7 +923,7 @@ export default function App() {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[2] tracking-[0.1em] ${
+                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] ${
                                   isFullscreen
                                     ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
                                     : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
