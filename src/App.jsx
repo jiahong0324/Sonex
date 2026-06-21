@@ -545,10 +545,10 @@ export default function App() {
 
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans,FontSize=24,PrimaryColour=&H00000000,OutlineColour=&H00FFFFFF,BorderStyle=1,Outline=3,Shadow=2,Bold=1,MarginV=70'",
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
+        '-i', 'subs.srt',
+        '-c:v', 'copy',
         '-c:a', 'copy',
+        '-c:s', 'mov_text',
         'output.mp4'
       ]);
 
@@ -835,8 +835,7 @@ export default function App() {
                           <span key={cap.id} 
                                 className="text-black text-2xl md:text-3xl font-black inline-block max-w-[90%] md:max-w-2xl break-words whitespace-pre-wrap leading-snug tracking-wide"
                                 style={{
-                                  WebkitTextStroke: '2.5px white',
-                                  textShadow: '0px 3px 6px rgba(0,0,0,0.8)'
+                                  textShadow: '0 2px 0 #fff, 0 -2px 0 #fff, 2px 0 0 #fff, -2px 0 0 #fff, 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff'
                                 }}>
                             {cap.text}
                           </span>
