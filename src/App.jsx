@@ -384,15 +384,26 @@ export default function App() {
         chunks.forEach(chunk => {
           let c = chunk.trim();
           if (!c) return;
-          // Split long chunks > 18 characters (great for Chinese and English shorts)
-          while (c.length > 18) {
-             let splitIdx = 18;
-             const spaceIdx = c.lastIndexOf(' ', 18);
-             if (spaceIdx > 10) splitIdx = spaceIdx; // split at space if available
-             finalChunks.push(c.substring(0, splitIdx).trim());
-             c = c.substring(splitIdx).trim();
+          const hasChinese = /[\u4e00-\u9fa5]/.test(c);
+          const maxLen = hasChinese ? 14 : 35; // Maximum characters before forcing a split into new time segments
+          
+          if (c.length <= maxLen) {
+            if (c) finalChunks.push(c);
+          } else {
+            // Split into perfectly even halves (or thirds) to avoid lopsided captions
+            const parts = Math.ceil(c.length / maxLen);
+            const splitLen = Math.ceil(c.length / parts);
+            let temp = c;
+            while (temp.length > 0) {
+              let splitIdx = splitLen;
+              if (!hasChinese && temp.length > splitLen) {
+                const spaceIdx = temp.lastIndexOf(' ', splitLen + 8);
+                if (spaceIdx > splitLen * 0.5) splitIdx = spaceIdx;
+              }
+              finalChunks.push(temp.substring(0, splitIdx).trim());
+              temp = temp.substring(splitIdx).trim();
+            }
           }
-          if (c) finalChunks.push(c);
         });
 
         const totalChars = finalChunks.reduce((acc, c) => acc + c.length, 0);
