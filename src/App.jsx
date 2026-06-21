@@ -470,37 +470,27 @@ export default function App() {
     };
   }, []);
 
+  const lastActiveIdRef = useRef(null);
+
   // Auto scroll caption list with video playing status
   useEffect(() => {
-    if (!videoRef.current) return;
-    
-    const handleTimeUpdate = () => {
-      const time = videoRef.current.currentTime;
-      setCurrentTime(time);
-
-      // Find active caption
-      const active = captions.find(cap => time >= cap.startTime && time <= cap.endTime);
-      
-      if (active) {
-        const element = document.getElementById(`cap-block-${active.id}`);
-        if (element && listContainerRef.current) {
-          const container = listContainerRef.current;
-          const rect = element.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-          
-          if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }
+    const active = captions.find(cap => currentTime >= cap.startTime && currentTime <= cap.endTime);
+    if (active && active.id !== lastActiveIdRef.current) {
+      lastActiveIdRef.current = active.id;
+      const element = document.getElementById(`cap-block-${active.id}`);
+      if (element && listContainerRef.current) {
+        const container = listContainerRef.current;
+        const rect = element.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
+        if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
       }
-    };
-
-    const videoEl = videoRef.current;
-    videoEl.addEventListener('timeupdate', handleTimeUpdate);
-    return () => {
-      videoEl.removeEventListener('timeupdate', handleTimeUpdate);
-    };
-  }, [captions]);
+    } else if (!active) {
+      lastActiveIdRef.current = null;
+    }
+  }, [currentTime, captions]);
 
   // Download logic (UTF-8, No BOM as requested)
   const handleDownloadSRT = () => {
@@ -815,6 +805,7 @@ export default function App() {
                   controls
                   controlsList="nofullscreen"
                   className="w-full h-full object-contain"
+                  onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
                 />
                 
                 {/* Custom Fullscreen Button that preserves overlays */}
