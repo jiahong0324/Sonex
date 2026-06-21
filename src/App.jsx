@@ -888,7 +888,7 @@ export default function App() {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-[1.7] tracking-[0.1em] ${
+                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-[1.5] tracking-[0.1em] ${
                                   isFullscreen
                                     ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
                                     : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
