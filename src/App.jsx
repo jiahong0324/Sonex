@@ -991,14 +991,13 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleBurnSubtitles}
-                  className="group relative w-full py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 active:scale-[0.98] text-emerald-400 font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 border border-emerald-500/30 hover:border-emerald-400/60 shadow-[0_4px_20px_rgba(16,185,129,0.05)] hover:shadow-[0_4px_25px_rgba(16,185,129,0.15)] transition-all duration-300 transform hover:-translate-y-0.5 text-base overflow-hidden"
+                  disabled
+                  className="group relative w-full py-3.5 px-6 bg-zinc-900/50 text-emerald-400/50 font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 border border-emerald-500/20 text-base overflow-hidden cursor-not-allowed"
                 >
-                  <div className="absolute inset-0 bg-emerald-400/5 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
-                  <svg className="w-5 h-5 text-emerald-500/80 group-hover:text-emerald-400 transition-colors duration-300 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-emerald-500/50 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  <span className="relative z-10">Render for Social Media</span>
+                  <span className="relative z-10">Render for Social Media (coming)</span>
                 </button>
               </div>
             ) : (
