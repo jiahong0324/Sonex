@@ -567,21 +567,24 @@ export default function App() {
       const srtBlob = new Blob([srtContent], { type: 'text/plain' });
       await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
 
-      // Soft captions export doesn't require font loading
+      setProcessStep("Loading fonts for subtitle rendering...");
+      await ffmpeg.createDir('/fonts');
+      await ffmpeg.writeFile('/fonts/font.ttf', await fetchFile(`${baseURL}/font.ttf`));
 
-      setProcessStep("Rendering social media ready video...");
+      setProcessStep("Rendering social media ready video (this may take a while)...");
       setProcessProgress(20);
 
       ffmpeg.on('log', ({ message }) => {
         console.log('[FFmpeg]', message);
       });
 
+      // Burn the subtitles directly into the video frames (hard subs)
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-i', 'subs.srt',
-        '-c:v', 'copy',
+        '-vf', 'subtitles=subs.srt:fontsdir=/fonts',
+        '-c:v', 'libx264',
+        '-preset', 'fast',
         '-c:a', 'copy',
-        '-c:s', 'mov_text',
         'output.mp4'
       ]);
 
