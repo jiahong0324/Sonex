@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import localforage from 'localforage';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
+import coreURL from '@ffmpeg/core/dist/umd/ffmpeg-core.js?url';
+import wasmURL from '@ffmpeg/core/dist/umd/ffmpeg-core.wasm?url';
 
 // --- Global Config & Helpers ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'sonex-caption-gen';
@@ -524,11 +526,10 @@ export default function App() {
         setProcessProgress(Math.max(10, Math.floor(progress * 100)));
       });
 
-      // Load single-threaded core
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      // Load bundled single-threaded core (no unpkg or CORS issues)
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+        coreURL,
+        wasmURL
       });
 
       setProcessStep("Preparing video & subtitles in virtual file system...");
@@ -683,47 +684,49 @@ export default function App() {
           )}
 
           {/* Box 2: Drag & Drop Media Upload Area */}
-          <div 
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
-              videoFile 
-                ? 'border-emerald-500/40 bg-emerald-500/[0.02]' 
-                : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/20'
-            }`}
-            onClick={() => fileInputRef.current.click()}
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              accept="video/mp4, video/quicktime, video/webm" 
-              className="hidden" 
-            />
-            
-            <div className="max-w-md mx-auto space-y-3">
-              <div className="mx-auto w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-zinc-200">
-                  {videoFile ? videoFile.name : 'Drag & Drop Video here, or click to browse'}
-                </p>
-                <p className="text-xs text-zinc-500 mt-1">
-                  Supports MP4, MOV, and WebM video containers
-                </p>
-              </div>
-
-              {videoFile && (
-                <div className="inline-flex items-center gap-2 bg-zinc-800 text-zinc-300 px-3 py-1 rounded-full text-xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
+          {captions.length === 0 && (
+            <div 
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
+                videoFile 
+                  ? 'border-emerald-500/40 bg-emerald-500/[0.02]' 
+                  : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/20'
+              }`}
+              onClick={() => fileInputRef.current.click()}
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="video/mp4, video/quicktime, video/webm" 
+                className="hidden" 
+              />
+              
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
                 </div>
-              )}
+                <div>
+                  <p className="text-sm font-semibold text-zinc-200">
+                    {videoFile ? videoFile.name : 'Drag & Drop Video here, or click to browse'}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Supports MP4, MOV, and WebM video containers
+                  </p>
+                </div>
+
+                {videoFile && (
+                  <div className="inline-flex items-center gap-2 bg-zinc-800 text-zinc-300 px-3 py-1 rounded-full text-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Box 3: Model Selector, Extraction Mode Switch & Captions Generator Action */}
           {videoFile && (
@@ -881,6 +884,40 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* Bottom Upload Area for New Video */}
+          {captions.length > 0 && (
+            <div 
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              className="border-2 border-dashed border-zinc-800 hover:border-emerald-500/50 bg-zinc-900/20 hover:bg-emerald-500/5 rounded-2xl p-6 text-center transition-all cursor-pointer"
+              onClick={() => fileInputRef.current.click()}
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="video/mp4, video/quicktime, video/webm" 
+                className="hidden" 
+              />
+              
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="mx-auto w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-zinc-200">
+                    Upload a new video
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Drag & Drop Video here, or click to browse
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Right Side: Caption Editor & Export Tools */}
