@@ -208,6 +208,7 @@ export default function App() {
 
   const [extractionMethod, setExtractionMethod] = useState('extract'); // 'extract' or 'direct'
   const [selectedModel, setSelectedModel] = useState('whisper-large-v3'); // 'whisper-large-v3' or 'whisper-large-v3-turbo'
+  const [selectedLanguage, setSelectedLanguage] = useState('auto'); // 'auto', 'en', 'zh'
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
   const [processProgress, setProcessProgress] = useState(0);
@@ -348,7 +349,15 @@ export default function App() {
       formData.append('file', fileToSend);
       formData.append('model', selectedModel);
       formData.append('response_format', 'verbose_json');
-      formData.append('prompt', 'Export with standard professional subtitling punctuation and phrasing.');
+      
+      let promptText = 'Export with standard professional subtitling punctuation and phrasing.';
+      if (selectedLanguage === 'zh') {
+        formData.append('language', 'zh');
+        promptText = '输出标准的专业字幕标点符号和语句。';
+      } else if (selectedLanguage === 'en') {
+        formData.append('language', 'en');
+      }
+      formData.append('prompt', promptText);
 
       const response = await fetchWithBackoff('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
@@ -818,7 +827,45 @@ export default function App() {
                 </div>
               </div>
 
-
+              {/* Language Choice */}
+              <div className="space-y-1.5 mt-4">
+                <label className="text-xs text-zinc-400 font-semibold">Video Language</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguage('auto')}
+                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-center transition-all ${
+                      selectedLanguage === 'auto'
+                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    Auto Detect
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguage('en')}
+                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-center transition-all ${
+                      selectedLanguage === 'en'
+                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    English
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLanguage('zh')}
+                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-center transition-all ${
+                      selectedLanguage === 'zh'
+                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    Chinese (中文)
+                  </button>
+                </div>
+              </div>
 
               {!isProcessing ? (
                 <button
