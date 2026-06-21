@@ -824,14 +824,22 @@ export default function App() {
                 
                 {/* On-screen visual subtitle layer to test visual flow */}
                 {captions.length > 0 && (
-                  <div className="absolute bottom-24 md:bottom-32 left-4 right-4 text-center pointer-events-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
+                  <div className={`absolute left-4 right-4 text-center pointer-events-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] ${
+                    isFullscreen ? 'bottom-36 md:bottom-44' : 'bottom-16 md:bottom-20'
+                  }`}>
                     {captions.map((cap) => {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className="text-black text-2xl md:text-3xl font-black inline-block max-w-[90%] md:max-w-2xl break-words whitespace-pre-wrap leading-snug tracking-wide"
+                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-snug tracking-[0.1em] ${
+                                  isFullscreen
+                                    ? 'text-2xl md:text-3xl max-w-[90%] md:max-w-2xl'
+                                    : 'text-lg md:text-xl max-w-[90%] md:max-w-lg'
+                                }`}
                                 style={{
-                                  textShadow: '0 2px 0 #fff, 0 -2px 0 #fff, 2px 0 0 #fff, -2px 0 0 #fff, 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff'
+                                  textShadow: isFullscreen
+                                    ? '0 2px 0 #fff, 0 -2px 0 #fff, 2px 0 0 #fff, -2px 0 0 #fff, 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff'
+                                    : '0 1.5px 0 #fff, 0 -1.5px 0 #fff, 1.5px 0 0 #fff, -1.5px 0 0 #fff, 1.5px 1.5px 0 #fff, -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff'
                                 }}>
                             {cap.text}
                           </span>
