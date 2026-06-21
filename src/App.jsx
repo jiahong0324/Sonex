@@ -17,8 +17,8 @@ const createSmoothOutline = (thickness, color) => {
   return arr.join(', ');
 };
 
-const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(2, '#fff');
-const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(1.5, '#fff');
+const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(2.5, '#000');
+const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(1.8, '#000');
 
 // Standard PCM WAV encoder to convert decoded browser AudioBuffer to 16kHz mono WAV
 function bufferToWav(buffer) {
@@ -586,7 +586,7 @@ export default function App() {
       // Burn the subtitles directly into the video frames (hard subs)
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00000000,OutlineColour=&H00FFFFFF,Outline=1.2,Shadow=1,MarginV=25,Alignment=2,FontSize=24,Bold=1'",
+        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1.8,Shadow=2.5,BackColour=&H00000000,MarginV=30,Alignment=2,FontSize=24,Bold=1'",
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'copy',
@@ -881,14 +881,14 @@ export default function App() {
                 
                 {/* On-screen visual subtitle layer to test visual flow */}
                 {captions.length > 0 && (
-                  <div className={`absolute left-4 right-4 text-center pointer-events-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] ${
+                  <div className={`absolute left-4 right-4 text-center pointer-events-none drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
                     isFullscreen ? 'bottom-44 md:bottom-52' : 'bottom-24 md:bottom-28'
                   }`}>
                     {captions.map((cap) => {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-[1.5] tracking-[0.1em] ${
+                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] tracking-[0.1em] ${
                                   isFullscreen
                                     ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
                                     : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
