@@ -17,8 +17,8 @@ const createSmoothOutline = (thickness, color) => {
   return arr.join(', ');
 };
 
-const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(4, '#fff');
-const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(3, '#fff');
+const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(2, '#fff');
+const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(1.5, '#fff');
 
 // Standard PCM WAV encoder to convert decoded browser AudioBuffer to 16kHz mono WAV
 function bufferToWav(buffer) {
@@ -140,7 +140,7 @@ function formatSRT(captions, addSpacing = false) {
     .map((cap, index) => {
       let wrappedText = getWrappedText(cap.text);
       if (addSpacing) {
-        wrappedText = wrappedText.replace(/\n/g, '\n<font size="8"> </font>\n');
+        wrappedText = wrappedText.replace(/\n/g, '\n{\\alpha&HFF&}{\\fs16}.{\\fs24}{\\alpha&H00&}\n');
       }
       return `${index + 1}\n${cap.startStr} --> ${cap.endStr}\n${wrappedText}`;
     })
@@ -586,7 +586,7 @@ export default function App() {
       // Burn the subtitles directly into the video frames (hard subs)
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00000000,OutlineColour=&H00FFFFFF,Outline=2,Shadow=1,MarginV=25,Alignment=2,FontSize=24,Bold=1'",
+        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00000000,OutlineColour=&H00FFFFFF,Outline=1.2,Shadow=1,MarginV=25,Alignment=2,FontSize=24,Bold=1'",
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'copy',
