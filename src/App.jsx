@@ -140,7 +140,7 @@ function formatSRT(captions, addSpacing = false) {
     .map((cap, index) => {
       let wrappedText = getWrappedText(cap.text);
       if (addSpacing) {
-        wrappedText = wrappedText.replace(/\n/g, '\n{\\alpha&HFF&}{\\fs16}.{\\fs24}{\\alpha&H00&}\n');
+        wrappedText = wrappedText.replace(/\n/g, '\n{\\alpha&HFF&}{\\fs24}.{\\fs24}{\\alpha&H00&}\n');
       }
       return `${index + 1}\n${cap.startStr} --> ${cap.endStr}\n${wrappedText}`;
     })
@@ -888,7 +888,7 @@ export default function App() {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] tracking-[0.1em] ${
+                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[2] tracking-[0.1em] ${
                                   isFullscreen
                                     ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
                                     : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
