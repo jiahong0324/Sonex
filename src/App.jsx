@@ -739,47 +739,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setExtractionMethod('extract')}
-                  className={`p-3.5 rounded-xl border text-left transition-all ${
-                    extractionMethod === 'extract'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-white shadow-md'
-                      : 'border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="font-semibold text-sm flex items-center justify-between">
-                    <span>Extract Audio Track</span>
-                    <span className="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded uppercase">Highly Recommended</span>
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Converts video sound locally to ultra-compact 16kHz mono WAV file before upload. Saves bandwidth & bypasses 25MB limits.
-                  </p>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (videoFile.size > 25 * 1024 * 1024) {
-                      showFeedback('error', 'The file exceeds 25MB. Client-side audio extraction is required.');
-                      return;
-                    }
-                    setExtractionMethod('direct');
-                  }}
-                  disabled={videoFile.size > 25 * 1024 * 1024}
-                  className={`p-3.5 rounded-xl border text-left transition-all ${
-                    extractionMethod === 'direct'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                      : 'border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700'
-                  } ${videoFile.size > 25 * 1024 * 1024 ? 'opacity-40 cursor-not-allowed' : ''}`}
-                >
-                  <div className="font-semibold text-sm">Direct Upload</div>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Uploads the video directly to the AI server. Highly convenient for small reels and shorts under 25MB.
-                  </p>
-                </button>
-              </div>
 
               {!isProcessing ? (
                 <button
