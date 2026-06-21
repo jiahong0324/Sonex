@@ -95,43 +95,12 @@ function secondsToTimeStr(seconds) {
   return `${h}:${m}:${s},${msStr}`;
 }
 
-// Helper to automatically wrap text to multiple lines for visual balance
+// Helper to enforce single-line captions for TikTok/Reels style
 function getWrappedText(text) {
   if (!text) return text;
-  return text.split('\n').map(line => {
-    const hasChinese = /[\u4e00-\u9fa5]/.test(line);
-    const limit = hasChinese ? 14 : 25; // 14 chars for Chinese is the sweet spot: keeps short sentences on 1 line, wraps long ones
-    if (line.length <= limit) return line;
-
-    const formattedLines = [];
-    if (hasChinese) {
-      // Split evenly into 2 lines for best aesthetic, or more if extremely long
-      // Clean up whitespace to prevent edge cases
-      const cleanLine = line.trim();
-      if (cleanLine.length <= limit * 2) {
-        const mid = Math.ceil(cleanLine.length / 2);
-        formattedLines.push(cleanLine.substring(0, mid));
-        formattedLines.push(cleanLine.substring(mid));
-      } else {
-        for (let i = 0; i < cleanLine.length; i += limit) {
-          formattedLines.push(cleanLine.substring(i, i + limit));
-        }
-      }
-    } else {
-      const words = line.split(' ');
-      let currentLine = '';
-      for (let word of words) {
-        if ((currentLine + ' ' + word).trim().length <= limit) {
-          currentLine = (currentLine + ' ' + word).trim();
-        } else {
-          if (currentLine) formattedLines.push(currentLine);
-          currentLine = word;
-        }
-      }
-      if (currentLine) formattedLines.push(currentLine);
-    }
-    return formattedLines.join('\n');
-  }).join('\n');
+  // We no longer wrap to multiple lines automatically since we want a 1-line Reels style.
+  // The chunker below handles breaking long text into multiple time segments instead.
+  return text.replace(/\n/g, ' ').trim();
 }
 
 // Formatter to recreate SRT
@@ -394,23 +363,31 @@ export default function App() {
           let c = chunk.trim();
           if (!c) return;
           const hasChinese = /[\u4e00-\u9fa5]/.test(c);
-          const maxLen = hasChinese ? 14 : 35; // Maximum characters before forcing a split into new time segments
+          const maxLen = hasChinese ? 14 : 18; // Max characters before forcing a split into new time segments
           
           if (c.length <= maxLen) {
             if (c) finalChunks.push(c);
           } else {
-            // Split into perfectly even halves (or thirds) to avoid lopsided captions
-            const parts = Math.ceil(c.length / maxLen);
-            const splitLen = Math.ceil(c.length / parts);
-            let temp = c;
-            while (temp.length > 0) {
-              let splitIdx = splitLen;
-              if (!hasChinese && temp.length > splitLen) {
-                const spaceIdx = temp.lastIndexOf(' ', splitLen + 8);
-                if (spaceIdx > splitLen * 0.5) splitIdx = spaceIdx;
+            if (hasChinese) {
+              // Chinese can be split at any character
+              const parts = Math.ceil(c.length / maxLen);
+              const splitLen = Math.ceil(c.length / parts);
+              for (let i = 0; i < c.length; i += splitLen) {
+                finalChunks.push(c.substring(i, i + splitLen));
               }
-              finalChunks.push(temp.substring(0, splitIdx).trim());
-              temp = temp.substring(splitIdx).trim();
+            } else {
+              // English must be split exactly at word boundaries for Reels style
+              const words = c.split(' ');
+              let currentChunk = '';
+              for (let word of words) {
+                if ((currentChunk + ' ' + word).trim().length <= maxLen) {
+                  currentChunk = (currentChunk + ' ' + word).trim();
+                } else {
+                  if (currentChunk) finalChunks.push(currentChunk);
+                  currentChunk = word;
+                }
+              }
+              if (currentChunk) finalChunks.push(currentChunk);
             }
           }
         });
