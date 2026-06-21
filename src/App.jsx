@@ -530,7 +530,13 @@ export default function App() {
       const srtBlob = new Blob([srtContent], { type: 'text/plain' });
       await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
 
-      setProcessStep("Embedding subtitles into video container...");
+      setProcessStep("Loading Chinese font package...");
+      const fontResponse = await fetch('/font.ttf');
+      if (!fontResponse.ok) throw new Error("Could not load font file from server.");
+      const fontBlob = await fontResponse.blob();
+      await ffmpeg.writeFile('font.ttf', await fetchFile(fontBlob));
+
+      setProcessStep("Rendering social media ready video...");
       setProcessProgress(20);
 
       ffmpeg.on('log', ({ message }) => {
@@ -539,9 +545,10 @@ export default function App() {
 
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-i', 'subs.srt',
-        '-c', 'copy',
-        '-c:s', 'mov_text',
+        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans,FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Bold=1,MarginV=70'",
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-c:a', 'copy',
         'output.mp4'
       ]);
 
@@ -569,7 +576,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Unknown FFmpeg execution error');
-      showFeedback('error', 'Failed to embed subtitles: ' + errMsg);
+      showFeedback('error', 'Failed to render subtitles: ' + errMsg);
     } finally {
       setIsProcessing(false);
       setProcessStep('');
@@ -825,7 +832,12 @@ export default function App() {
                     {captions.map((cap) => {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
-                          <span key={cap.id} className="bg-black/90 text-white border border-black/50 text-base md:text-xl font-bold px-5 py-2.5 rounded-xl inline-block max-w-[90%] md:max-w-2xl break-words whitespace-pre-wrap leading-snug tracking-wide">
+                          <span key={cap.id} 
+                                className="text-white text-2xl md:text-3xl font-black inline-block max-w-[90%] md:max-w-2xl break-words whitespace-pre-wrap leading-snug tracking-wide"
+                                style={{
+                                  WebkitTextStroke: '2px black',
+                                  textShadow: '0px 3px 6px rgba(0,0,0,0.8)'
+                                }}>
                             {cap.text}
                           </span>
                         );
@@ -926,7 +938,7 @@ export default function App() {
                   <svg className="w-5 h-5 text-emerald-500/80 group-hover:text-emerald-400 transition-colors duration-300 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  <span className="relative z-10">Embed & Download</span>
+                  <span className="relative z-10">Render for Social Media</span>
                 </button>
               </div>
             ) : (
