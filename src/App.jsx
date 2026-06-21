@@ -927,23 +927,24 @@ export default function App() {
             
             {/* Download SRT Button block */}
             {captions.length > 0 ? (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <button
                   type="button"
                   onClick={handleDownloadSRT}
-                  className="w-full py-4 px-6 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-black font-extrabold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/20 transition-all text-base animate-pulse"
+                  className="group relative w-full py-3.5 px-6 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] text-black font-extrabold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(16,185,129,0.15)] hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all duration-300 transform hover:-translate-y-0.5 text-base overflow-hidden"
                 >
-                  <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
+                  <svg className="w-5 h-5 stroke-current fill-none stroke-2 relative z-10" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Download SRT File
+                  <span className="relative z-10">Download SRT File</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleBurnSubtitles}
-                  className="w-full py-3 px-6 bg-zinc-800 hover:bg-zinc-700 active:scale-[0.99] text-white font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 transition-all text-sm border border-zinc-700"
+                  className="group w-full py-3.5 px-6 bg-zinc-900/80 hover:bg-zinc-800 active:scale-[0.98] text-zinc-300 font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 transition-all duration-300 text-sm border border-zinc-700/50 hover:border-zinc-500 hover:text-white shadow-lg hover:-translate-y-0.5"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                   Burn Subtitles & Download Video
