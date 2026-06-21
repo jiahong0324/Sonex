@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import localforage from 'localforage';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
-import coreURL from '@ffmpeg/core/dist/umd/ffmpeg-core.js?url';
-import wasmURL from '@ffmpeg/core/dist/umd/ffmpeg-core.wasm?url';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 // --- Global Config & Helpers ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'sonex-caption-gen';
@@ -526,10 +524,11 @@ export default function App() {
         setProcessProgress(Math.max(10, Math.floor(progress * 100)));
       });
 
-      // Load bundled single-threaded core (no unpkg or CORS issues)
+      // Load bundled core from our own static server (bypasses unpkg blockers entirely)
+      const baseURL = window.location.origin;
       await ffmpeg.load({
-        coreURL,
-        wasmURL
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
       });
 
       setProcessStep("Preparing video & subtitles in virtual file system...");

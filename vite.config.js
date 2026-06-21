@@ -8,6 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      workbox: {
+        maximumFileSizeToCacheInBytes: 50000000 // 50MB to allow caching ffmpeg-core.wasm and font.ttf
+      },
       manifest: {
         name: 'Sonex Caption Master',
         short_name: 'Sonex',
