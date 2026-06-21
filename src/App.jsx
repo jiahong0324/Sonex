@@ -17,8 +17,8 @@ const createSmoothOutline = (thickness, color) => {
   return arr.join(', ');
 };
 
-const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(4, '#fff');
-const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(3, '#fff');
+const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(4, '#000');
+const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(3, '#000');
 
 // Standard PCM WAV encoder to convert decoded browser AudioBuffer to 16kHz mono WAV
 function bufferToWav(buffer) {
@@ -581,7 +581,7 @@ export default function App() {
       // Burn the subtitles directly into the video frames (hard subs)
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', 'subtitles=subs.srt:fontsdir=/fonts',
+        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,MarginV=25,Alignment=2,FontSize=24,Bold=1'",
         '-c:v', 'libx264',
         '-preset', 'fast',
         '-c:a', 'copy',
@@ -883,7 +883,7 @@ export default function App() {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-snug tracking-[0.1em] ${
+                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-snug tracking-[0.1em] ${
                                   isFullscreen
                                     ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
                                     : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
