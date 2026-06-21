@@ -95,42 +95,49 @@ function secondsToTimeStr(seconds) {
   return `${h}:${m}:${s},${msStr}`;
 }
 
+// Helper to automatically wrap text to multiple lines for visual balance
+function getWrappedText(text) {
+  if (!text) return text;
+  return text.split('\n').map(line => {
+    const hasChinese = /[\u4e00-\u9fa5]/.test(line);
+    const limit = hasChinese ? 13 : 26; // Break roughly at 12-14 chars for Chinese, 26 for English
+    if (line.length <= limit) return line;
+
+    const formattedLines = [];
+    if (hasChinese || !line.includes(' ')) {
+      // Split evenly into 2 lines for best aesthetic, or more if extremely long
+      if (line.length <= limit * 2) {
+        const mid = Math.ceil(line.length / 2);
+        formattedLines.push(line.substring(0, mid));
+        formattedLines.push(line.substring(mid));
+      } else {
+        for (let i = 0; i < line.length; i += limit) {
+          formattedLines.push(line.substring(i, i + limit));
+        }
+      }
+    } else {
+      const words = line.split(' ');
+      let currentLine = '';
+      for (let word of words) {
+        if ((currentLine + ' ' + word).trim().length <= limit) {
+          currentLine = (currentLine + ' ' + word).trim();
+        } else {
+          if (currentLine) formattedLines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      if (currentLine) formattedLines.push(currentLine);
+    }
+    return formattedLines.join('\n');
+  }).join('\n');
+}
+
 // Formatter to recreate SRT
 function formatSRT(captions) {
   return captions
     .map((cap, index) => {
-      // Split lines to keep each under 42 characters for better visual balance in video players
-      const lines = cap.text.split('\n');
-      const formattedLines = [];
-      for (let line of lines) {
-        const hasChinese = /[\u4e00-\u9fa5]/.test(line);
-        const limit = hasChinese ? 16 : 42;
-        
-        if (line.length > limit) {
-          if (hasChinese || !line.includes(' ')) {
-            let currentLine = '';
-            for (let i = 0; i < line.length; i += limit) {
-              currentLine += line.substring(i, i + limit) + '\n';
-            }
-            formattedLines.push(currentLine.trim());
-          } else {
-            const words = line.split(' ');
-            let currentLine = '';
-            for (let word of words) {
-              if ((currentLine + ' ' + word).trim().length <= limit) {
-                currentLine = (currentLine + ' ' + word).trim();
-              } else {
-                if (currentLine) formattedLines.push(currentLine);
-                currentLine = word;
-              }
-            }
-            if (currentLine) formattedLines.push(currentLine);
-          }
-        } else {
-          formattedLines.push(line);
-        }
-      }
-      return `${index + 1}\n${cap.startStr} --> ${cap.endStr}\n${formattedLines.join('\n')}`;
+      const wrappedText = getWrappedText(cap.text);
+      return `${index + 1}\n${cap.startStr} --> ${cap.endStr}\n${wrappedText}`;
     })
     .join('\n\n');
 }
@@ -406,26 +413,7 @@ export default function App() {
 
       // Convert segments directly into structured SRT formats
       const parsed = refinedSegments.map((seg, index) => {
-        let text = seg.text;
-        const hasChinese = /[\u4e00-\u9fa5]/.test(text);
-        
-        // Auto-wrap to a second line if there are too many words
-        if (hasChinese && text.length > 12 && !text.includes('\n')) {
-          const mid = Math.ceil(text.length / 2);
-          text = text.substring(0, mid) + '\n' + text.substring(mid);
-        } else if (!hasChinese && text.length > 25 && !text.includes('\n')) {
-          const words = text.split(' ');
-          let line1 = '';
-          let line2 = '';
-          for (let w of words) {
-              if ((line1 + w).length <= 25 || !line1) {
-                  line1 += w + ' ';
-              } else {
-                  line2 += w + ' ';
-              }
-          }
-          text = line1.trim() + (line2 ? '\n' + line2.trim() : '');
-        }
+        let text = getWrappedText(seg.text);
 
         return {
           id: index + 1,
@@ -902,7 +890,7 @@ export default function App() {
                                     ? SMOOTH_OUTLINE_FULLSCREEN
                                     : SMOOTH_OUTLINE_NORMAL
                                 }}>
-                            {cap.text}
+                            {getWrappedText(cap.text)}
                           </span>
                         );
                       }
