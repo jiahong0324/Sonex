@@ -837,7 +837,7 @@ export default function App() {
                 {/* On-screen visual subtitle layer to test visual flow */}
                 {captions.length > 0 && (
                   <div className={`absolute left-4 right-4 text-center pointer-events-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] ${
-                    isFullscreen ? 'bottom-36 md:bottom-44' : 'bottom-16 md:bottom-20'
+                    isFullscreen ? 'bottom-44 md:bottom-52' : 'bottom-24 md:bottom-28'
                   }`}>
                     {captions.map((cap) => {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
@@ -845,13 +845,13 @@ export default function App() {
                           <span key={cap.id} 
                                 className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-snug tracking-[0.1em] ${
                                   isFullscreen
-                                    ? 'text-2xl md:text-3xl max-w-[90%] md:max-w-2xl'
-                                    : 'text-lg md:text-xl max-w-[90%] md:max-w-lg'
+                                    ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
+                                    : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
                                 }`}
                                 style={{
                                   textShadow: isFullscreen
-                                    ? '0 2px 0 #fff, 0 -2px 0 #fff, 2px 0 0 #fff, -2px 0 0 #fff, 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff'
-                                    : '0 1.5px 0 #fff, 0 -1.5px 0 #fff, 1.5px 0 0 #fff, -1.5px 0 0 #fff, 1.5px 1.5px 0 #fff, -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff'
+                                    ? '0 3.5px 0 #fff, 0 -3.5px 0 #fff, 3.5px 0 0 #fff, -3.5px 0 0 #fff, 3.5px 3.5px 0 #fff, -3.5px -3.5px 0 #fff, 3.5px -3.5px 0 #fff, -3.5px 3.5px 0 #fff'
+                                    : '0 2.5px 0 #fff, 0 -2.5px 0 #fff, 2.5px 0 0 #fff, -2.5px 0 0 #fff, 2.5px 2.5px 0 #fff, -2.5px -2.5px 0 #fff, 2.5px -2.5px 0 #fff, -2.5px 2.5px 0 #fff'
                                 }}>
                             {cap.text}
                           </span>
