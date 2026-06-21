@@ -100,7 +100,7 @@ function getWrappedText(text) {
   if (!text) return text;
   return text.split('\n').map(line => {
     const hasChinese = /[\u4e00-\u9fa5]/.test(line);
-    const limit = hasChinese ? 10 : 20; // Break aggressively at 10 chars for Chinese, 20 for English for vertical videos
+    const limit = hasChinese ? 18 : 35; // Default to 1 line, only break if extremely long
     if (line.length <= limit) return line;
 
     const formattedLines = [];
