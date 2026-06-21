@@ -547,8 +547,8 @@ export default function App() {
         '-i', inputName,
         '-vf', "subtitles=subs.srt:fontsdir=.:force_style='FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-c:a', 'aac',
+        '-preset', 'ultrafast',
+        '-c:a', 'copy',
         'output.mp4'
       ]);
 
