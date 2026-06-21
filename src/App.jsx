@@ -568,7 +568,19 @@ export default function App() {
       document.body.removeChild(a);
       URL.revokeObjectURL(exportUrl);
 
-      showFeedback('success', 'Video successfully rendered and downloaded!');
+      // Download SRT alongside the video
+      const finalSrtContent = formatSRT(captions);
+      const srtBlobObj = new Blob([finalSrtContent], { type: 'text/plain;charset=utf-8' });
+      const srtUrl = URL.createObjectURL(srtBlobObj);
+      const srtA = document.createElement('a');
+      srtA.href = srtUrl;
+      srtA.download = `${cleanName}_Sonex.srt`;
+      document.body.appendChild(srtA);
+      srtA.click();
+      document.body.removeChild(srtA);
+      URL.revokeObjectURL(srtUrl);
+
+      showFeedback('success', 'Video and Captions successfully downloaded!');
     } catch (err) {
       console.error(err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Unknown FFmpeg execution error');
