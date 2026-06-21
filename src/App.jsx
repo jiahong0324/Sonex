@@ -585,7 +585,7 @@ export default function App() {
         '-i', inputName,
         '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00000000,OutlineColour=&H00FFFFFF,Outline=2,Shadow=1,MarginV=25,Alignment=2,FontSize=24,Bold=1'",
         '-c:v', 'libx264',
-        '-preset', 'fast',
+        '-preset', 'ultrafast',
         '-c:a', 'copy',
         'output.mp4'
       ]);
@@ -885,7 +885,7 @@ export default function App() {
                       if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                         return (
                           <span key={cap.id} 
-                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-snug tracking-[0.1em] ${
+                                className={`text-black font-black inline-block break-words whitespace-pre-wrap leading-[1.7] tracking-[0.1em] ${
                                   isFullscreen
                                     ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
                                     : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
