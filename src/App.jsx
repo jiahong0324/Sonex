@@ -95,12 +95,39 @@ function secondsToTimeStr(seconds) {
   return `${h}:${m}:${s},${msStr}`;
 }
 
-// Helper to enforce single-line captions for TikTok/Reels style
+// Helper to enforce single-line captions, but explicitly wrap to a new line if too long
+// This prevents CapCut from auto-justifying and creating huge spaces on older long captions
 function getWrappedText(text) {
   if (!text) return text;
-  // We no longer wrap to multiple lines automatically since we want a 1-line Reels style.
-  // The chunker below handles breaking long text into multiple time segments instead.
-  return text.replace(/\s+/g, ' ').trim();
+  
+  // Clean up any weird double spaces or existing newlines
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  
+  const limit = 18; // Max characters per line before forcing a clean newline
+  if (cleanText.length <= limit) return cleanText;
+
+  const hasChinese = /[\u4e00-\u9fa5]/.test(cleanText);
+  const lines = [];
+  
+  if (hasChinese) {
+    for (let i = 0; i < cleanText.length; i += limit) {
+      lines.push(cleanText.substring(i, i + limit));
+    }
+  } else {
+    const words = cleanText.split(' ');
+    let currentLine = '';
+    for (let word of words) {
+      if ((currentLine + ' ' + word).trim().length <= limit) {
+        currentLine = (currentLine + ' ' + word).trim();
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+  }
+  
+  return lines.join('\n');
 }
 
 // Formatter to recreate SRT
