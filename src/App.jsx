@@ -245,7 +245,7 @@ export default function App() {
   // Generate captions logic using Groq API
   const handleGenerateCaptions = async () => {
     if (!apiKey.trim()) {
-      showFeedback('error', 'Please provide a valid Groq API Key first.');
+      showFeedback('error', 'Please provide a valid API Key first.');
       return;
     }
     if (!videoFile) {
@@ -273,10 +273,10 @@ export default function App() {
 
       // Check max limits for Groq API (usually 25MB)
       if (fileToSend.size > 25 * 1024 * 1024) {
-        throw new Error("The target file exceeds Groq's 25MB hard limit. Please check 'Extract audio client-side' or upload a smaller file.");
+        throw new Error("The target file exceeds the 25MB hard limit. Please check 'Extract audio client-side' or upload a smaller file.");
       }
 
-      setProcessStep("Connecting and sending audio payload to Groq API...");
+      setProcessStep("Connecting and sending audio payload to AI API...");
       setProcessProgress(50);
 
       const formData = new FormData();
@@ -295,15 +295,15 @@ export default function App() {
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `Groq API responded with code: ${response.status}`);
+        throw new Error(errJson.error?.message || `AI API responded with code: ${response.status}`);
       }
 
-      setProcessStep("Processing output returned from Groq...");
+      setProcessStep("Processing output returned from AI API...");
       setProcessProgress(90);
 
       const resJson = await response.json();
       if (!resJson.segments || !Array.isArray(resJson.segments)) {
-        throw new Error("Groq API succeeded but did not return any time-segmented transcription blocks.");
+        throw new Error("AI API succeeded but did not return any time-segmented transcription blocks.");
       }
 
       // Post-process to break long segments into short chunks for Shorts/Reels format
@@ -470,9 +470,9 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                Sonex Caption Master <span className="text-xs bg-zinc-800 text-zinc-400 font-medium px-2 py-0.5 rounded-full border border-zinc-700">Groq Engine</span>
+                Sonex Caption Master <span className="text-xs bg-zinc-800 text-zinc-400 font-medium px-2 py-0.5 rounded-full border border-zinc-700">AI Engine</span>
               </h1>
-              <p className="text-xs text-zinc-400">Generate, customize & clean up video speech captions instantaneously using Groq</p>
+              <p className="text-xs text-zinc-400">Generate, customize & clean up video speech captions instantaneously using AI</p>
             </div>
           </div>
           
@@ -504,7 +504,7 @@ export default function App() {
                   <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                  1. Groq API Authorization
+                  1. AI API Authorization
                 </h2>
                 <label className="flex items-center gap-2 text-xs text-zinc-500 cursor-pointer">
                   <input 
@@ -529,11 +529,11 @@ export default function App() {
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all font-mono"
                 />
                 <span className="absolute right-3 top-3 text-[10px] bg-zinc-855 text-emerald-400 px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold">
-                  GROQ SECURE
+                  API SECURE
                 </span>
               </div>
               <p className="text-xs text-zinc-500">
-                Your API keys are never stored on external servers. All connections occur directly inside your browser to Groq's high-speed endpoint.
+                Your API keys are never stored on external servers. All connections occur directly inside your browser to the high-speed endpoint.
               </p>
             </div>
           )}
@@ -593,7 +593,7 @@ export default function App() {
 
               {/* Model Choice */}
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400 font-semibold">Select Groq Whisper Model</label>
+                <label className="text-xs text-zinc-400 font-semibold">Select Whisper Model</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -659,7 +659,7 @@ export default function App() {
                 >
                   <div className="font-semibold text-sm">Direct Upload</div>
                   <p className="text-xs text-zinc-500 mt-1">
-                    Uploads the video directly to Groq. Highly convenient for small reels and shorts under 25MB.
+                    Uploads the video directly to the AI server. Highly convenient for small reels and shorts under 25MB.
                   </p>
                 </button>
               </div>
@@ -673,7 +673,7 @@ export default function App() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Generate Captions using Groq LPU
+                  Generate Captions using AI
                 </button>
               ) : (
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-800 rounded-xl mt-4">
@@ -690,7 +690,7 @@ export default function App() {
                     />
                   </div>
                   <p className="text-[10px] text-zinc-500 text-center italic">
-                    Note: Audio transcription takes roughly 2-5 seconds on Groq. Keep this page open.
+                    Note: Audio transcription takes roughly 2-5 seconds on the AI server. Keep this page open.
                   </p>
                 </div>
               )}
@@ -778,7 +778,7 @@ export default function App() {
               </button>
             ) : (
               <div className="p-4 bg-zinc-950 border border-dashed border-zinc-800 rounded-xl text-center text-xs text-zinc-500">
-                No captions generated yet. Fill in your Groq API Key and upload a video to generate captions.
+                No captions generated yet. Fill in your API Key and upload a video to generate captions.
               </div>
             )}
 

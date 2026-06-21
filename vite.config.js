@@ -11,7 +11,7 @@ export default defineConfig({
       manifest: {
         name: 'Sonex Caption Master',
         short_name: 'Sonex',
-        description: 'Generate, customize & clean up video speech captions instantaneously using Groq',
+        description: 'Generate, customize & clean up video speech captions instantaneously using AI',
         theme_color: '#09090b', // zinc-950
         background_color: '#09090b',
         display: 'standalone',
