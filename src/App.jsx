@@ -135,10 +135,13 @@ function getWrappedText(text) {
 }
 
 // Formatter to recreate SRT
-function formatSRT(captions) {
+function formatSRT(captions, addSpacing = false) {
   return captions
     .map((cap, index) => {
-      const wrappedText = getWrappedText(cap.text);
+      let wrappedText = getWrappedText(cap.text);
+      if (addSpacing) {
+        wrappedText = wrappedText.replace(/\n/g, '\n<font size="8"> </font>\n');
+      }
       return `${index + 1}\n${cap.startStr} --> ${cap.endStr}\n${wrappedText}`;
     })
     .join('\n\n');
@@ -565,7 +568,7 @@ export default function App() {
       const inputName = `input.${ext}`;
       await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
       
-      const srtContent = formatSRT(captions);
+      const srtContent = formatSRT(captions, true);
       const srtBlob = new Blob([srtContent], { type: 'text/plain' });
       await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
 
