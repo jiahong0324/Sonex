@@ -144,6 +144,7 @@ export default function App() {
   const [saveKey, setSaveKey] = useState(true);
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState('');
+  const [videoAspectRatio, setVideoAspectRatio] = useState('16/9');
   const [captions, setCaptions] = useState([]);
   const [isStateRestored, setIsStateRestored] = useState(false);
 
@@ -886,14 +887,20 @@ export default function App() {
                 </svg>
                 Media Preview & Player
               </h3>
-              <div ref={playerContainerRef} className={`relative rounded-xl overflow-hidden bg-black border border-zinc-800 group ${isFullscreen ? 'w-full h-full flex flex-col justify-center' : 'aspect-video'}`}>
+              <div ref={playerContainerRef} className={`relative rounded-xl overflow-hidden bg-black border border-zinc-800 group flex justify-center items-center ${isFullscreen ? 'w-full h-full' : 'h-[55vh] min-h-[400px] max-h-[700px]'}`}>
                 <video
                   ref={videoRef}
                   src={videoUrl}
                   controls
                   controlsList="nofullscreen"
-                  className="w-full h-full object-contain"
+                  className="h-full w-auto object-contain max-w-full"
                   onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                  onLoadedMetadata={(e) => {
+                    const { videoWidth, videoHeight } = e.target;
+                    if (videoWidth && videoHeight) {
+                      setVideoAspectRatio(`${videoWidth}/${videoHeight}`);
+                    }
+                  }}
                 />
                 
                 {/* Custom Fullscreen Button that preserves overlays */}
@@ -916,29 +923,38 @@ export default function App() {
                 
                 {/* On-screen visual subtitle layer to test visual flow */}
                 {captions.length > 0 && (
-                  <div className={`absolute left-4 right-4 text-center pointer-events-none drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
-                    isFullscreen ? 'bottom-44 md:bottom-52' : 'bottom-24 md:bottom-28'
-                  }`}>
-                    {captions.map((cap) => {
-                      if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
-                        return (
-                          <span key={cap.id} 
-                                className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] ${
-                                  isFullscreen
-                                    ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
-                                    : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
-                                }`}
-                                style={{
-                                  textShadow: isFullscreen
-                                    ? SMOOTH_OUTLINE_FULLSCREEN
-                                    : SMOOTH_OUTLINE_NORMAL
-                                }}>
-                            {getWrappedText(cap.text)}
-                          </span>
-                        );
-                      }
-                      return null;
-                    })}
+                  <div 
+                    className="absolute pointer-events-none flex justify-center"
+                    style={{ 
+                      aspectRatio: videoAspectRatio,
+                      height: '100%',
+                      maxWidth: '100%'
+                    }}
+                  >
+                    <div className={`absolute left-4 right-4 text-center drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
+                      isFullscreen ? 'bottom-20 md:bottom-28' : 'bottom-16 md:bottom-20'
+                    }`}>
+                      {captions.map((cap) => {
+                        if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
+                          return (
+                            <span key={cap.id} 
+                                  className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] ${
+                                    isFullscreen
+                                      ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
+                                      : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
+                                  }`}
+                                  style={{
+                                    textShadow: isFullscreen
+                                      ? SMOOTH_OUTLINE_FULLSCREEN
+                                      : SMOOTH_OUTLINE_NORMAL
+                                  }}>
+                              {getWrappedText(cap.text)}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
