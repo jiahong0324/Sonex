@@ -545,7 +545,7 @@ export default function App() {
 
       const execCode = await ffmpeg.exec([
         '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
+        '-vf', "subtitles=subs.srt:fontsdir=.:force_style='Fontname=Noto Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=25'",
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-c:a', 'copy',
