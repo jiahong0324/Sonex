@@ -197,6 +197,7 @@ export default function App() {
   const videoRef = useRef(null);
   const listContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const playerContainerRef = useRef(null);
 
   // Store key to localStorage when updated
   const handleKeyChange = (val) => {
@@ -822,13 +823,32 @@ export default function App() {
                 </svg>
                 Media Preview & Player
               </h3>
-              <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800">
+              <div ref={playerContainerRef} className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800 group">
                 <video
                   ref={videoRef}
                   src={videoUrl}
                   controls
+                  controlsList="nofullscreen"
                   className="w-full h-full object-contain"
                 />
+                
+                {/* Custom Fullscreen Button that preserves overlays */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (document.fullscreenElement) {
+                      document.exitFullscreen();
+                    } else if (playerContainerRef.current) {
+                      playerContainerRef.current.requestFullscreen();
+                    }
+                  }}
+                  className="absolute top-4 right-4 bg-black/60 hover:bg-black text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
+                  title="Fullscreen with Captions"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                </button>
                 
                 {/* On-screen visual subtitle layer to test visual flow */}
                 {captions.length > 0 && (
