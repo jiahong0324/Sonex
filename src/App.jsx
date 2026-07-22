@@ -173,6 +173,7 @@ export default function App() {
   const [videoUrl, setVideoUrl] = useState('');
   const [videoAspectRatio, setVideoAspectRatio] = useState('16/9');
   const [captions, setCaptions] = useState([]);
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const [isStateRestored, setIsStateRestored] = useState(false);
 
   // Restore state from IndexedDB on mount
@@ -555,25 +556,31 @@ export default function App() {
 
   const lastActiveIdRef = useRef(null);
 
-  // Auto scroll caption list with video playing status
+  // Auto scroll caption list inside container only (never scrolls parent window)
   useEffect(() => {
+    if (!autoScrollEnabled) return;
     const active = captions.find(cap => currentTime >= cap.startTime && currentTime <= cap.endTime);
     if (active && active.id !== lastActiveIdRef.current) {
       lastActiveIdRef.current = active.id;
       const element = document.getElementById(`cap-block-${active.id}`);
       if (element && listContainerRef.current) {
         const container = listContainerRef.current;
-        const rect = element.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        
-        if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const elementTop = element.offsetTop;
+        const elementHeight = element.offsetHeight;
+        const containerHeight = container.clientHeight;
+        const currentScroll = container.scrollTop;
+
+        if (elementTop < currentScroll || (elementTop + elementHeight) > (currentScroll + containerHeight)) {
+          container.scrollTo({
+            top: Math.max(0, elementTop - containerHeight / 2 + elementHeight / 2),
+            behavior: 'smooth'
+          });
         }
       }
     } else if (!active) {
       lastActiveIdRef.current = null;
     }
-  }, [currentTime, captions]);
+  }, [currentTime, captions, autoScrollEnabled]);
 
   // Download logic (UTF-8, No BOM as requested)
   const handleDownloadSRT = () => {
@@ -730,7 +737,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Side: Setup, Video Player, controls */}
-        <section className="lg:col-span-7 space-y-6">
+        <section className="lg:col-span-7 space-y-6 lg:sticky lg:top-4 h-fit">
           
           {/* Box 1: Configuration & API Key */}
           {!envApiKey && (
@@ -987,7 +994,7 @@ export default function App() {
                     }}
                   >
                     <div className={`absolute left-4 right-4 text-center drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
-                      (isFullscreen || isCssFullscreen) ? 'bottom-36 md:bottom-48' : 'bottom-12 sm:bottom-16 md:bottom-20'
+                      (isFullscreen || isCssFullscreen) ? 'bottom-28 md:bottom-36' : 'bottom-16 sm:bottom-20 md:bottom-24'
                     }`}>
                       {captions.map((cap) => {
                         if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
@@ -1142,10 +1149,28 @@ export default function App() {
             )}
 
             {/* Captions search bar / counters */}
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="text-sm font-bold text-zinc-300">
-                Captions List ({filteredCaptions.length})
-              </h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-bold text-zinc-300">
+                  Captions List ({filteredCaptions.length})
+                </h3>
+                {captions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setAutoScrollEnabled(!autoScrollEnabled)}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors flex items-center gap-1.5 ${
+                      autoScrollEnabled
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                        : 'bg-zinc-850 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                    }`}
+                    title="Toggle auto-scrolling transcript with video playback"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${autoScrollEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+                    {autoScrollEnabled ? 'Auto-Sync ON' : 'Auto-Sync OFF'}
+                  </button>
+                )}
+              </div>
+
               {captions.length > 0 && (
                 <input
                   type="text"
