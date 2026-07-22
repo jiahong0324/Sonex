@@ -216,6 +216,7 @@ export default function App() {
   const [editText, setEditText] = useState('');
   const [feedback, setFeedback] = useState({ type: '', msg: '' });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isCssFullscreen, setIsCssFullscreen] = useState(false);
 
   const videoRef = useRef(null);
   const listContainerRef = useRef(null);
@@ -288,7 +289,15 @@ export default function App() {
     setProcessStep("Initializing local AudioContext...");
     setProcessProgress(30);
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContextClass({ sampleRate: 16000 }); // Optimize size to perfect speech rate (16kHz)
+    let audioCtx;
+    try {
+      audioCtx = new AudioContextClass({ sampleRate: 16000 }); // Optimize size to perfect speech rate (16kHz)
+    } catch {
+      audioCtx = new AudioContextClass();
+    }
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume().catch(() => {});
+    }
 
     setProcessStep("Extracting and decoding audio track (client-side)...");
     setProcessProgress(55);
@@ -501,18 +510,22 @@ export default function App() {
     setEditCapId(null);
   };
 
-  // Fix native fullscreen hijacking
+  // Fix native fullscreen hijacking & fallback for devices without native Element.requestFullscreen (iOS)
   useEffect(() => {
     const handleFullscreenChange = () => {
       const isFs = !!document.fullscreenElement;
       setIsFullscreen(isFs);
 
       if (document.fullscreenElement === videoRef.current) {
-        document.exitFullscreen().then(() => {
-          if (playerContainerRef.current) {
-            playerContainerRef.current.requestFullscreen();
-          }
-        }).catch(e => console.error(e));
+        if (document.exitFullscreen) {
+          document.exitFullscreen().then(() => {
+            if (playerContainerRef.current?.requestFullscreen) {
+              playerContainerRef.current.requestFullscreen().catch(() => setIsCssFullscreen(true));
+            } else {
+              setIsCssFullscreen(true);
+            }
+          }).catch(e => console.error(e));
+        }
       }
     };
     
@@ -524,6 +537,21 @@ export default function App() {
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(e => console.error(e));
+      setIsCssFullscreen(false);
+    } else if (isCssFullscreen) {
+      setIsCssFullscreen(false);
+    } else if (playerContainerRef.current?.requestFullscreen) {
+      playerContainerRef.current.requestFullscreen().catch(() => {
+        setIsCssFullscreen(true);
+      });
+    } else {
+      setIsCssFullscreen(!isCssFullscreen);
+    }
+  };
 
   const lastActiveIdRef = useRef(null);
 
@@ -686,13 +714,13 @@ export default function App() {
           
           {/* Global Alert / Toast Notifications */}
           {feedback.msg && (
-            <div className={`px-4 py-2.5 rounded-xl text-sm border flex items-center gap-2 animate-fade-in ${
+            <div className={`px-4 py-2.5 rounded-xl text-sm border flex items-center gap-2 max-w-full sm:max-w-md break-words animate-fade-in ${
               feedback.type === 'success' 
                 ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 shadow-lg shadow-emerald-500/5' 
                 : 'bg-rose-950/40 text-rose-300 border-rose-800/60 shadow-lg shadow-rose-500/5'
             }`}>
-              <div className={`w-2 h-2 rounded-full ${feedback.type === 'success' ? 'bg-emerald-400' : 'bg-rose-400'} animate-pulse`} />
-              <span>{feedback.msg}</span>
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${feedback.type === 'success' ? 'bg-emerald-400' : 'bg-rose-400'} animate-pulse`} />
+              <span className="break-words leading-tight">{feedback.msg}</span>
             </div>
           )}
         </div>
@@ -736,7 +764,7 @@ export default function App() {
                   onChange={(e) => handleKeyChange(e.target.value)}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all font-mono"
                 />
-                <span className="absolute right-3 top-3 text-[10px] bg-zinc-855 text-emerald-400 px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold">
+                <span className="absolute right-3 top-3 text-[10px] bg-zinc-800 text-emerald-400 px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold">
                   API SECURE
                 </span>
               </div>
@@ -839,7 +867,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setSelectedLanguage('auto')}
-                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-center transition-all ${
+                    className={`px-1.5 sm:px-3 py-2 text-[11px] sm:text-xs rounded-xl font-medium border text-center transition-all truncate ${
                       selectedLanguage === 'auto'
                         ? 'border-emerald-500 bg-emerald-500/10 text-white'
                         : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
@@ -850,7 +878,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setSelectedLanguage('en')}
-                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-center transition-all ${
+                    className={`px-1.5 sm:px-3 py-2 text-[11px] sm:text-xs rounded-xl font-medium border text-center transition-all truncate ${
                       selectedLanguage === 'en'
                         ? 'border-emerald-500 bg-emerald-500/10 text-white'
                         : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
@@ -861,7 +889,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setSelectedLanguage('zh')}
-                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-center transition-all ${
+                    className={`px-1.5 sm:px-3 py-2 text-[11px] sm:text-xs rounded-xl font-medium border text-center transition-all truncate ${
                       selectedLanguage === 'zh'
                         ? 'border-emerald-500 bg-emerald-500/10 text-white'
                         : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
@@ -914,11 +942,17 @@ export default function App() {
                 </svg>
                 Media Preview & Player
               </h3>
-              <div ref={playerContainerRef} className={`relative rounded-xl overflow-hidden bg-black border border-zinc-800 group flex justify-center items-center ${isFullscreen ? 'w-full h-full' : 'h-[55vh] min-h-[400px] max-h-[700px]'}`}>
+              <div ref={playerContainerRef} className={`relative rounded-xl overflow-hidden bg-black border border-zinc-800 group flex justify-center items-center ${
+                isFullscreen || isCssFullscreen 
+                  ? 'fixed inset-0 z-50 w-screen h-screen rounded-none border-none bg-black' 
+                  : 'h-[55vh] min-h-[240px] sm:min-h-[340px] md:min-h-[400px] max-h-[700px]'
+              }`}>
                 <video
                   ref={videoRef}
                   src={videoUrl}
                   controls
+                  playsInline
+                  webkit-playsinline="true"
                   controlsList="nofullscreen"
                   className="h-full w-auto object-contain max-w-full"
                   onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
@@ -933,14 +967,8 @@ export default function App() {
                 {/* Custom Fullscreen Button that preserves overlays */}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (document.fullscreenElement) {
-                      document.exitFullscreen();
-                    } else if (playerContainerRef.current) {
-                      playerContainerRef.current.requestFullscreen();
-                    }
-                  }}
-                  className="absolute top-4 right-4 bg-black/70 hover:bg-black text-white p-2 rounded-lg transition-opacity z-10 shadow-lg"
+                  onClick={toggleFullscreen}
+                  className="absolute top-4 right-4 bg-black/70 hover:bg-black text-white p-2.5 sm:p-2 rounded-lg transition-opacity z-10 shadow-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
                   title="Fullscreen with Captions"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -959,19 +987,19 @@ export default function App() {
                     }}
                   >
                     <div className={`absolute left-4 right-4 text-center drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
-                      isFullscreen ? 'bottom-40 md:bottom-48' : 'bottom-36 md:bottom-40'
+                      (isFullscreen || isCssFullscreen) ? 'bottom-36 md:bottom-48' : 'bottom-12 sm:bottom-16 md:bottom-20'
                     }`}>
                       {captions.map((cap) => {
                         if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
                           return (
                             <span key={cap.id} 
                                   className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] ${
-                                    isFullscreen
+                                    (isFullscreen || isCssFullscreen)
                                       ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
-                                      : 'text-xl md:text-2xl max-w-[90%] md:max-w-lg'
+                                      : 'text-lg sm:text-xl md:text-2xl max-w-[92%] md:max-w-lg'
                                   }`}
                                   style={{
-                                    textShadow: isFullscreen
+                                    textShadow: (isFullscreen || isCssFullscreen)
                                       ? SMOOTH_OUTLINE_FULLSCREEN
                                       : SMOOTH_OUTLINE_NORMAL
                                   }}>
@@ -1049,7 +1077,7 @@ export default function App() {
         </section>
 
         {/* Right Side: Caption Editor & Export Tools */}
-        <section className="lg:col-span-5 flex flex-col h-[calc(100vh-140px)] min-h-[500px]">
+        <section className="lg:col-span-5 flex flex-col lg:h-[calc(100vh-140px)] h-[550px] lg:min-h-[500px]">
           
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 flex flex-col h-full space-y-4">
             
@@ -1095,6 +1123,8 @@ export default function App() {
                   <input
                     type="number"
                     step="0.1"
+                    inputMode="decimal"
+                    pattern="[0-9.-]*"
                     placeholder="-1.5 or 0.5"
                     value={timeOffset || ''}
                     onChange={(e) => setTimeOffset(parseFloat(e.target.value) || 0)}
@@ -1170,7 +1200,11 @@ export default function App() {
                                 e.stopPropagation();
                                 handleSaveEdit(cap.id);
                               }}
-                              className="text-emerald-400 hover:text-emerald-300 px-1.5 py-0.5 rounded bg-emerald-950/40"
+                              onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                handleSaveEdit(cap.id);
+                              }}
+                              className="text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded bg-emerald-950/60 text-xs font-semibold"
                             >
                               Save
                             </button>
@@ -1180,7 +1214,11 @@ export default function App() {
                                 e.stopPropagation();
                                 setEditCapId(null);
                               }}
-                              className="text-zinc-400 hover:text-zinc-200 px-1.5"
+                              onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                setEditCapId(null);
+                              }}
+                              className="text-zinc-400 hover:text-zinc-200 px-2 py-1 text-xs"
                             >
                               Cancel
                             </button>
@@ -1192,10 +1230,14 @@ export default function App() {
                               e.stopPropagation();
                               handleStartEdit(cap);
                             }}
-                            className="text-zinc-500 hover:text-zinc-300 p-1 rounded hover:bg-zinc-800"
+                            onTouchEnd={(e) => {
+                              e.stopPropagation();
+                              handleStartEdit(cap);
+                            }}
+                            className="text-zinc-500 hover:text-zinc-300 p-2 sm:p-1.5 rounded-lg hover:bg-zinc-800 min-w-[36px] min-h-[36px] flex items-center justify-center transition-colors"
                             title="Edit this block"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                           </button>
