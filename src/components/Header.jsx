@@ -15,6 +15,7 @@ export default function Header({
   captionsCount,
   videoFile,
   apiKey,
+  hasEnvKey,
   onOpenShortcuts,
   onOpenImport,
   onResetProject,
@@ -112,22 +113,24 @@ export default function Header({
 
         {/* Global Toolbar Actions */}
         <div className="flex items-center gap-2">
-          {/* API Key Status Pill */}
-          <button
-            type="button"
-            onClick={onOpenApiKeyModal}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs transition-all ${
-              apiKey
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 animate-pulse'
-            }`}
-            title="Configure Groq Whisper API Key"
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline font-mono">
-              {apiKey ? 'API Connected' : 'Set API Key'}
-            </span>
-          </button>
+          {/* API Key Status Pill - Only visible if no environment key is pre-configured */}
+          {!hasEnvKey && (
+            <button
+              type="button"
+              onClick={onOpenApiKeyModal}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs transition-all ${
+                apiKey
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 animate-pulse'
+              }`}
+              title="Configure Groq Whisper API Key"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline font-mono">
+                {apiKey ? 'API Key' : 'Set API Key'}
+              </span>
+            </button>
+          )}
 
           {/* Import SRT/VTT */}
           <button

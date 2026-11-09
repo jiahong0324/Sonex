@@ -16,6 +16,7 @@ export default function TranscriptionSettings({
   onKeyChange,
   saveKey,
   setSaveKey,
+  hasEnvKey,
   selectedModel,
   setSelectedModel,
   selectedLanguage,
@@ -46,67 +47,69 @@ export default function TranscriptionSettings({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: API & Model Settings */}
+        {/* Left Column: Model & Audio Settings */}
         <div className="lg:col-span-7 space-y-5">
-          {/* API Key Box */}
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-emerald-400" />
-                <span>1. Groq Whisper API Key</span>
-              </label>
-              <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+          {/* API Key Box - Only visible when not configured via Vercel / environment variable */}
+          {!hasEnvKey && (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-emerald-400" />
+                  <span>1. Groq Whisper API Key</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={saveKey}
+                    onChange={(e) => setSaveKey(e.target.checked)}
+                    className="rounded bg-zinc-950 border-zinc-800 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span>Remember key</span>
+                </label>
+              </div>
+
+              <div className="relative">
                 <input
-                  type="checkbox"
-                  checked={saveKey}
-                  onChange={(e) => setSaveKey(e.target.checked)}
-                  className="rounded bg-zinc-950 border-zinc-800 text-emerald-500 focus:ring-emerald-500"
+                  type={showKey ? 'text' : 'password'}
+                  placeholder="gsk_..."
+                  value={apiKey}
+                  onChange={(e) => onKeyChange(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-4 pr-24 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 font-mono transition-all"
                 />
-                <span>Remember key</span>
-              </label>
-            </div>
+                <div className="absolute right-2 top-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="text-[10px] text-zinc-400 hover:text-white px-2 py-1 rounded bg-zinc-800"
+                  >
+                    {showKey ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
 
-            <div className="relative">
-              <input
-                type={showKey ? 'text' : 'password'}
-                placeholder="gsk_..."
-                value={apiKey}
-                onChange={(e) => onKeyChange(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-4 pr-24 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 font-mono transition-all"
-              />
-              <div className="absolute right-2 top-2 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="text-[10px] text-zinc-400 hover:text-white px-2 py-1 rounded bg-zinc-800"
+              <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                <div className="flex items-center gap-1 text-emerald-400/90">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Runs client-side directly to API endpoint</span>
+                </div>
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-zinc-400 hover:text-emerald-400 flex items-center gap-1 underline underline-offset-2"
                 >
-                  {showKey ? 'Hide' : 'Show'}
-                </button>
+                  <span>Get Free Groq Key</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </div>
-
-            <div className="flex items-center justify-between text-[11px] text-zinc-500">
-              <div className="flex items-center gap-1 text-emerald-400/90">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Runs client-side directly to API endpoint</span>
-              </div>
-              <a
-                href="https://console.groq.com/keys"
-                target="_blank"
-                rel="noreferrer"
-                className="text-zinc-400 hover:text-emerald-400 flex items-center gap-1 underline underline-offset-2"
-              >
-                <span>Get Free Groq Key</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </div>
+          )}
 
           {/* Whisper Model Selector */}
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
               <Cpu className="w-4 h-4 text-emerald-400" />
-              <span>2. Select Whisper Model</span>
+              <span>{hasEnvKey ? '1.' : '2.'} Select Whisper Model</span>
             </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -156,7 +159,7 @@ export default function TranscriptionSettings({
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
               <FileAudio className="w-4 h-4 text-emerald-400" />
-              <span>3. Audio Extraction Engine</span>
+              <span>{hasEnvKey ? '2.' : '3.'} Audio Extraction Engine</span>
             </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -213,7 +216,7 @@ export default function TranscriptionSettings({
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
               <Globe2 className="w-4 h-4 text-emerald-400" />
-              <span>4. Target Spoken Language</span>
+              <span>{hasEnvKey ? '3.' : '4.'} Target Spoken Language</span>
             </label>
 
             <select
@@ -233,7 +236,7 @@ export default function TranscriptionSettings({
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
               <FileText className="w-4 h-4 text-emerald-400" />
-              <span>5. Custom Glossary / Proper Nouns (Optional)</span>
+              <span>{hasEnvKey ? '4.' : '5.'} Custom Glossary / Proper Nouns (Optional)</span>
             </label>
 
             <textarea

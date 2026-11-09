@@ -21,7 +21,9 @@ import { DEFAULT_STYLE } from './utils/styles';
 
 export default function App() {
   const envApiKey = import.meta.env.VITE_GROQ_API_KEY || '';
-  const [apiKey, setApiKey] = useState(() => envApiKey || localStorage.getItem('groq_api_key') || '');
+  const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('groq_api_key') || '');
+  const apiKey = envApiKey || userApiKey;
+  const hasEnvKey = Boolean(envApiKey);
   const [saveKey, setSaveKey] = useState(true);
 
   // Workflow Tabs: 'studio', 'style', 'transcribe', 'export'
@@ -66,9 +68,9 @@ export default function App() {
     }, 6000);
   }, []);
 
-  // Update & Store API Key
+  // Update & Store User API Key
   const handleKeyChange = (val) => {
-    setApiKey(val);
+    setUserApiKey(val);
     if (saveKey) {
       localStorage.setItem('groq_api_key', val);
     } else {
@@ -225,7 +227,7 @@ export default function App() {
   const handleGenerateCaptions = async () => {
     if (!apiKey.trim()) {
       showFeedback('error', 'Please provide a Groq API Key first.');
-      setIsApiKeyOpen(true);
+      if (!hasEnvKey) setIsApiKeyOpen(true);
       return;
     }
     if (!videoFile) {
@@ -410,6 +412,7 @@ export default function App() {
         captionsCount={captions.length}
         videoFile={videoFile}
         apiKey={apiKey}
+        hasEnvKey={hasEnvKey}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onOpenImport={() => setIsImportOpen(true)}
         onResetProject={handleResetProject}
@@ -426,7 +429,6 @@ export default function App() {
               <VideoPlayer
                 videoRef={videoRef}
                 videoUrl={videoUrl}
-                videoFile={videoFile}
                 captions={captions}
                 currentTime={currentTime}
                 setCurrentTime={setCurrentTime}
@@ -482,10 +484,11 @@ export default function App() {
         {/* TAB 3: AI TRANSCRIBE */}
         {activeTab === 'transcribe' && (
           <TranscriptionSettings
-            apiKey={apiKey}
+            apiKey={userApiKey}
             onKeyChange={handleKeyChange}
             saveKey={saveKey}
             setSaveKey={setSaveKey}
+            hasEnvKey={hasEnvKey}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             selectedLanguage={selectedLanguage}
@@ -534,15 +537,18 @@ export default function App() {
         onClose={() => setIsShortcutsOpen(false)}
       />
 
-      <ApiKeyModal
-        isOpen={isApiKeyOpen}
-        onClose={() => setIsApiKeyOpen(false)}
-        apiKey={apiKey}
-        onKeyChange={handleKeyChange}
-        saveKey={saveKey}
-        setSaveKey={setSaveKey}
-        showFeedback={showFeedback}
-      />
+      {!hasEnvKey && (
+        <ApiKeyModal
+          isOpen={isApiKeyOpen}
+          onClose={() => setIsApiKeyOpen(false)}
+          apiKey={userApiKey}
+          onKeyChange={handleKeyChange}
+          saveKey={saveKey}
+          setSaveKey={setSaveKey}
+          hasEnvKey={hasEnvKey}
+          showFeedback={showFeedback}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-zinc-900 bg-zinc-950 py-4 text-center text-[11px] text-zinc-500 mt-auto">

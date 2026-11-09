@@ -8,12 +8,13 @@ export default function ApiKeyModal({
   onKeyChange,
   saveKey,
   setSaveKey,
+  hasEnvKey,
   showFeedback,
 }) {
   const [tempKey, setTempKey] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen || hasEnvKey) return null;
 
   const handleSave = () => {
     onKeyChange(tempKey.trim());
