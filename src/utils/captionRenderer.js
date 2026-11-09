@@ -8,46 +8,116 @@
  * Guarantees 100% WYSIWYG rendering accuracy across all export pipelines.
  */
 
-// Synthesize word timestamps if caption only has sentence-level timing
+const CJK_REGEX = /[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]/;
+const PUNCTUATION_REGEX = /[，。？！,.?!；;:"'“”‘’]/;
+
+export function isCJK(str) {
+  return CJK_REGEX.test(str);
+}
+
+/**
+ * Break a text string into atomic wrapping tokens:
+ * - CJK characters are individual tokens (each character can break)
+ * - Latin/numeric words stay together as atomic tokens (e.g. "Sonex", "100%")
+ */
+function tokenizeString(text) {
+  if (!text) return [];
+  const regex = /[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]|([a-zA-Z0-9_]+|[^\s\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]+)/g;
+  return text.match(regex) || [];
+}
+
+/**
+ * Synthesize word/character timestamps from caption
+ * Handles pure English, pure CJK (Chinese/Japanese/Korean), and mixed text
+ */
 export function getCaptionWords(caption) {
+  const duration = Math.max(0.1, caption.endTime - caption.startTime);
+
+  // If words array is provided from Whisper
   if (caption.words && Array.isArray(caption.words) && caption.words.length > 0) {
-    return caption.words;
+    const refined = [];
+    for (const item of caption.words) {
+      const text = item.word || '';
+      // If item contains CJK characters, split into individual characters for fine-grained wrapping and animation
+      if (isCJK(text) && text.length > 1) {
+        const tokens = tokenizeString(text);
+        const itemDur = Math.max(0.05, (item.end || item.start + 0.3) - item.start);
+        const timePerToken = itemDur / tokens.length;
+        tokens.forEach((tok, idx) => {
+          refined.push({
+            word: tok,
+            start: item.start + idx * timePerToken,
+            end: item.start + (idx + 1) * timePerToken,
+          });
+        });
+      } else {
+        refined.push(item);
+      }
+    }
+    return refined;
   }
 
+  // If words array is not provided, tokenize the text cleanly
   const rawText = caption.text || '';
-  const words = rawText.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
+  const tokens = tokenizeString(rawText);
+  if (tokens.length === 0) return [];
 
-  const duration = Math.max(0.1, caption.endTime - caption.startTime);
-  const timePerWord = duration / words.length;
-
-  return words.map((w, idx) => ({
-    word: w,
-    start: caption.startTime + idx * timePerWord,
-    end: caption.startTime + (idx + 1) * timePerWord,
+  const timePerToken = duration / tokens.length;
+  return tokens.map((tok, idx) => ({
+    word: tok,
+    start: caption.startTime + idx * timePerToken,
+    end: caption.startTime + (idx + 1) * timePerToken,
   }));
 }
 
 /**
- * Split words into balanced lines that fit within maxCanvasWidth
+ * Calculate typographic spacing between two consecutive tokens
  */
-function layoutLines(ctx, words, maxCanvasWidth, isUppercase) {
+function getSpacingBetween(tokenA, tokenB, spaceWidth) {
+  if (!tokenA || !tokenB) return 0;
+  const textA = tokenA.word || '';
+  const textB = tokenB.word || '';
+
+  // No space before punctuation
+  if (PUNCTUATION_REGEX.test(textB)) return 0;
+
+  const aIsCJK = isCJK(textA);
+  const bIsCJK = isCJK(textB);
+
+  // Between two CJK characters: NO space (standard Asian typography)
+  if (aIsCJK && bIsCJK) return 0;
+
+  // Between two Latin words: standard full space
+  if (!aIsCJK && !bIsCJK) return spaceWidth;
+
+  // Between CJK and Latin: subtle breathing space
+  return spaceWidth * 0.35;
+}
+
+/**
+ * Split tokens into lines that fit within maxCanvasWidth without overflowing
+ */
+function layoutLines(ctx, tokens, maxCanvasWidth, isUppercase, spaceWidth) {
   const lines = [];
   let currentLine = [];
   let currentLineWidth = 0;
-  const spaceWidth = ctx.measureText(' ').width;
 
-  for (const item of words) {
+  for (let i = 0; i < tokens.length; i++) {
+    const item = tokens[i];
     const wordText = isUppercase ? item.word.toUpperCase() : item.word;
     const wordWidth = ctx.measureText(wordText).width;
 
-    if (currentLine.length > 0 && currentLineWidth + spaceWidth + wordWidth > maxCanvasWidth) {
+    const prevItem = currentLine[currentLine.length - 1];
+    const spacing = prevItem ? getSpacingBetween(prevItem, item, spaceWidth) : 0;
+
+    // Check if adding this token overflows maxCanvasWidth
+    if (currentLine.length > 0 && currentLineWidth + spacing + wordWidth > maxCanvasWidth) {
       lines.push(currentLine);
-      currentLine = [item];
+      currentLine = [{ ...item, spacingBefore: 0 }];
       currentLineWidth = wordWidth;
     } else {
-      currentLine.push(item);
-      currentLineWidth += (currentLine.length === 1 ? 0 : spaceWidth) + wordWidth;
+      currentLine.push({ ...item, spacingBefore: spacing });
+      currentLineWidth += spacing + wordWidth;
     }
   }
 
@@ -132,20 +202,21 @@ export function drawCaptionFrame(ctx, caption, currentTime, styleConfig, options
 
   if (!caption || !caption.text) return;
 
-  // Base scale calculation: standardizes rendering relative to 1080px base
-  const scale = height / 1080;
+  // Base scale calculation: standardizes rendering relative to minimum dimension (screen width for vertical video)
+  const baseDimension = Math.min(width, height);
+  const scale = baseDimension / 1080;
 
   const fontSizes = {
-    sm: 36,
-    md: 46,
-    lg: 58,
-    xl: 72,
-    '2xl': 90,
+    sm: 32,
+    md: 38,
+    lg: 46, // Standard viral size (clear, bold, fits ~14-16 chars per line comfortably)
+    xl: 56,
+    '2xl': 68,
   };
   const baseSize = typeof styleConfig.fontSize === 'number'
     ? styleConfig.fontSize
-    : (fontSizes[styleConfig.fontSize] || 58);
-  const fontSize = Math.round(baseSize * scale);
+    : (fontSizes[styleConfig.fontSize] || 46);
+  let fontSize = Math.round(baseSize * scale);
 
   const fontFamily = styleConfig.fontFamily || 'Impact, sans-serif';
   const fontWeight = styleConfig.isBold ? '900' : '600';
@@ -156,12 +227,34 @@ export function drawCaptionFrame(ctx, caption, currentTime, styleConfig, options
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
 
-  const words = getCaptionWords(caption);
-  const maxLineWidth = width * 0.86;
-  const spaceWidth = ctx.measureText(' ').width;
-  const lineHeight = fontSize * 1.25;
+  const tokens = getCaptionWords(caption);
+  // Maximum width: 82% of screen width (guarantees 9% margin on left and right)
+  const maxLineWidth = width * 0.82;
+  let spaceWidth = ctx.measureText(' ').width;
 
-  const lines = layoutLines(ctx, words, maxLineWidth, isUppercase);
+  // Initial layout calculation
+  let lines = layoutLines(ctx, tokens, maxLineWidth, isUppercase, spaceWidth);
+
+  // Dynamic Safety Shrink: if any line still exceeds maxLineWidth, gently reduce font size
+  let maxMeasuredWidth = 0;
+  lines.forEach((line) => {
+    let lw = 0;
+    line.forEach((item) => {
+      const text = isUppercase ? item.word.toUpperCase() : item.word;
+      lw += (item.spacingBefore || 0) + ctx.measureText(text).width;
+    });
+    if (lw > maxMeasuredWidth) maxMeasuredWidth = lw;
+  });
+
+  if (maxMeasuredWidth > maxLineWidth && maxMeasuredWidth > 0) {
+    const shrinkFactor = Math.max(0.75, (maxLineWidth / maxMeasuredWidth) * 0.95);
+    fontSize = Math.round(fontSize * shrinkFactor);
+    ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    spaceWidth = ctx.measureText(' ').width;
+    lines = layoutLines(ctx, tokens, maxLineWidth, isUppercase, spaceWidth);
+  }
+
+  const lineHeight = fontSize * 1.25;
   const totalBlockHeight = lines.length * lineHeight;
 
   // Vertical placement (percentage from top)
@@ -180,34 +273,34 @@ export function drawCaptionFrame(ctx, caption, currentTime, styleConfig, options
   }
   ctx.globalAlpha = globalAlpha;
 
-  const outlineThickness = (styleConfig.outlineThickness || 0) * scale * 1.5;
+  const outlineThickness = (styleConfig.outlineThickness || 0) * scale * 1.4;
   const hasOutline = outlineThickness > 0 && styleConfig.outlineColor && styleConfig.outlineColor !== 'transparent';
   const hasBg = styleConfig.bgOpacity > 0 && styleConfig.bgColor && styleConfig.bgColor !== 'transparent';
 
   // Render line by line
-  lines.forEach((lineWords, lineIdx) => {
+  lines.forEach((lineTokens, lineIdx) => {
     const lineY = blockStartY + lineIdx * lineHeight;
 
-    // Calculate line width
+    // Calculate exact line width
     let lineWidth = 0;
-    lineWords.forEach((item, idx) => {
+    lineTokens.forEach((item) => {
       const text = isUppercase ? item.word.toUpperCase() : item.word;
-      lineWidth += ctx.measureText(text).width;
-      if (idx < lineWords.length - 1) lineWidth += spaceWidth;
+      lineWidth += (item.spacingBefore || 0) + ctx.measureText(text).width;
     });
 
-    const lineStartX = (width - lineWidth) / 2;
+    // Ensure lineStartX is always safely within screen boundaries
+    const lineStartX = Math.max(width * 0.05, (width - lineWidth) / 2);
 
     // 1. Draw Background Box / Pill if enabled
     if (hasBg) {
       ctx.save();
       const paddingX = fontSize * 0.35;
-      const paddingY = fontSize * 0.18;
+      const paddingY = fontSize * 0.16;
       const rectX = lineStartX - paddingX;
       const rectY = lineY - lineHeight / 2 - paddingY;
       const rectW = lineWidth + paddingX * 2;
       const rectH = lineHeight + paddingY * 2;
-      const radius = Math.min(rectH / 2, 16 * scale);
+      const radius = Math.min(rectH / 2, 12 * scale);
 
       ctx.fillStyle = styleConfig.bgColor;
       ctx.globalAlpha = (styleConfig.bgOpacity ?? 0.8) * globalAlpha;
@@ -216,13 +309,16 @@ export function drawCaptionFrame(ctx, caption, currentTime, styleConfig, options
       ctx.restore();
     }
 
-    // 2. Draw words
+    // 2. Draw tokens / words
     let currentX = lineStartX;
 
-    lineWords.forEach((item) => {
+    lineTokens.forEach((item) => {
       const text = isUppercase ? item.word.toUpperCase() : item.word;
       const wordMetrics = ctx.measureText(text);
       const wordW = wordMetrics.width;
+      const spacingBefore = item.spacingBefore || 0;
+
+      currentX += spacingBefore;
 
       const isWordActive =
         currentTime >= item.start &&
@@ -233,12 +329,11 @@ export function drawCaptionFrame(ctx, caption, currentTime, styleConfig, options
       let wordOffsetY = 0;
 
       if (isWordActive && styleConfig.animation === 'bounce') {
-        const wordDur = Math.max(0.1, item.end - item.start);
+        const wordDur = Math.max(0.08, item.end - item.start);
         const progress = Math.max(0, Math.min(1, (currentTime - item.start) / wordDur));
-        // Sine bounce curve
         const bounceAmount = Math.sin(progress * Math.PI);
         wordScale = 1 + bounceAmount * 0.16;
-        wordOffsetY = -bounceAmount * 6 * scale;
+        wordOffsetY = -bounceAmount * 5 * scale;
       }
 
       ctx.save();
@@ -281,7 +376,7 @@ export function drawCaptionFrame(ctx, caption, currentTime, styleConfig, options
 
       ctx.restore();
 
-      currentX += wordW + spaceWidth;
+      currentX += wordW;
     });
   });
 

@@ -180,14 +180,19 @@ export default function VideoPlayer({
       >
         {videoUrl ? (
           <>
-            <div className="relative h-full w-auto max-w-full flex items-center justify-center">
+            <div
+              className="relative h-full max-w-full flex items-center justify-center overflow-hidden"
+              style={{
+                aspectRatio: videoAspectRatio || '16/9',
+              }}
+            >
               <video
                 ref={videoRef}
                 src={videoUrl}
                 playsInline
                 webkit-playsinline="true"
                 controlsList="nofullscreen"
-                className="h-full w-auto object-contain max-w-full cursor-pointer"
+                className="w-full h-full object-contain cursor-pointer"
                 onClick={togglePlay}
                 onPlay={handlePlay}
                 onPause={handlePause}
