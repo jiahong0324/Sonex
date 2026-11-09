@@ -14,6 +14,7 @@ import {
   Check,
   X,
   Edit3,
+  Wand2,
 } from 'lucide-react';
 import { secondsToTimeStr } from '../utils/timeUtils';
 
@@ -100,7 +101,7 @@ export default function CaptionList({
 
     const target = captions[index];
     const duration = target.endTime - target.startTime;
-    if (duration < 0.4) {
+    if (duration < 0.3) {
       showFeedback('error', 'Subtitle block duration is too short to split.');
       return;
     }
@@ -108,7 +109,6 @@ export default function CaptionList({
     const midTime = target.startTime + duration / 2;
     const text = target.text.trim();
 
-    // Try splitting by space or punctuation if possible
     let part1 = text;
     let part2 = text;
     const words = text.split(/\s+/);
@@ -141,7 +141,6 @@ export default function CaptionList({
     const updated = [...captions];
     updated.splice(index, 1, firstBlock, secondBlock);
 
-    // Re-index IDs cleanly
     const reindexed = updated.map((c, i) => ({ ...c, id: i + 1 }));
     setCaptions(reindexed);
     showFeedback('success', `Split block #${target.id} into two segments.`);
@@ -163,6 +162,7 @@ export default function CaptionList({
       endTime: next.endTime,
       endStr: next.endStr,
       text: `${current.text} ${next.text}`.trim(),
+      words: current.words && next.words ? [...current.words, ...next.words] : undefined,
     };
 
     const updated = [...captions];
@@ -178,7 +178,7 @@ export default function CaptionList({
     const updated = captions.filter((c) => c.id !== id);
     const reindexed = updated.map((c, i) => ({ ...c, id: i + 1 }));
     setCaptions(reindexed);
-    showFeedback('success', `Deleted caption block.`);
+    showFeedback('success', 'Deleted caption block.');
   };
 
   // Fine-tune timing for single caption
@@ -208,44 +208,99 @@ export default function CaptionList({
     );
   };
 
-  // Add new caption block at current playhead
+  // Insert New Caption Block at Playhead
   const handleAddCaptionAtPlayhead = () => {
-    const newStart = currentTime;
-    const newEnd = currentTime + 2.0;
-
     const newBlock = {
       id: Date.now(),
-      startTime: newStart,
-      endTime: newEnd,
-      startStr: secondsToTimeStr(newStart),
-      endStr: secondsToTimeStr(newEnd),
-      text: 'New Subtitle',
+      startTime: currentTime,
+      endTime: currentTime + 2.0,
+      startStr: secondsToTimeStr(currentTime),
+      endStr: secondsToTimeStr(currentTime + 2.0),
+      text: 'New subtitle text',
     };
 
     const updated = [...captions, newBlock].sort((a, b) => a.startTime - b.startTime);
     const reindexed = updated.map((c, i) => ({ ...c, id: i + 1 }));
     setCaptions(reindexed);
-    showFeedback('success', `Added new block at ${secondsToTimeStr(newStart)}.`);
+    showFeedback('success', 'Added new subtitle block at playhead.');
   };
 
-  // Global Time Shift
-  const handleApplyShift = (overrideVal) => {
-    const shift = parseFloat(overrideVal !== undefined ? overrideVal : timeOffset);
-    if (isNaN(shift) || shift === 0) return;
+  // Smart Re-break sentences for vertical video
+  const handleSmartRebreak = () => {
+    if (captions.length === 0) return;
+    const rebroken = [];
 
-    const updated = captions.map((cap) => {
-      const newStart = Math.max(0, cap.startTime + shift);
-      const newEnd = Math.max(0, cap.endTime + shift);
-      return {
-        ...cap,
-        startTime: newStart,
-        endTime: newEnd,
-        startStr: secondsToTimeStr(newStart),
-        endStr: secondsToTimeStr(newEnd),
-      };
+    captions.forEach((cap) => {
+      const text = cap.text.trim();
+      const hasChinese = /[\u4e00-\u9fa5]/.test(text);
+      const maxLen = hasChinese ? 14 : 24;
+
+      if (text.length <= maxLen) {
+        rebroken.push(cap);
+        return;
+      }
+
+      // Split long text
+      const duration = cap.endTime - cap.startTime;
+      const chunks = [];
+      if (hasChinese) {
+        const parts = Math.ceil(text.length / maxLen);
+        const splitLen = Math.ceil(text.length / parts);
+        for (let i = 0; i < text.length; i += splitLen) {
+          chunks.push(text.substring(i, i + splitLen));
+        }
+      } else {
+        const words = text.split(/\s+/);
+        let curr = '';
+        for (const w of words) {
+          if ((curr + ' ' + w).trim().length <= maxLen) {
+            curr = (curr + ' ' + w).trim();
+          } else {
+            if (curr) chunks.push(curr);
+            curr = w;
+          }
+        }
+        if (curr) chunks.push(curr);
+      }
+
+      const totalChars = chunks.reduce((acc, c) => acc + c.length, 0);
+      let time = cap.startTime;
+      chunks.forEach((chunk) => {
+        const chunkDur = totalChars > 0 ? (chunk.length / totalChars) * duration : duration;
+        rebroken.push({
+          startTime: time,
+          endTime: time + chunkDur,
+          startStr: secondsToTimeStr(time),
+          endStr: secondsToTimeStr(time + chunkDur),
+          text: chunk,
+        });
+        time += chunkDur;
+      });
     });
 
-    setCaptions(updated);
+    const reindexed = rebroken.map((c, i) => ({ ...c, id: i + 1 }));
+    setCaptions(reindexed);
+    showFeedback('success', `Smart re-break applied: organized into ${reindexed.length} punchy blocks.`);
+  };
+
+  // Shift all timestamps globally
+  const handleApplyShift = (customDelta) => {
+    const shift = customDelta !== undefined ? customDelta : parseFloat(timeOffset);
+    if (isNaN(shift) || shift === 0) return;
+
+    setCaptions((prev) =>
+      prev.map((cap) => {
+        const newStart = Math.max(0, cap.startTime + shift);
+        const newEnd = Math.max(newStart + 0.1, cap.endTime + shift);
+        return {
+          ...cap,
+          startTime: newStart,
+          endTime: newEnd,
+          startStr: secondsToTimeStr(newStart),
+          endStr: secondsToTimeStr(newEnd),
+        };
+      })
+    );
     setTimeOffset('');
     showFeedback('success', `Shifted all timestamps by ${shift > 0 ? '+' : ''}${shift}s.`);
   };
@@ -322,6 +377,17 @@ export default function CaptionList({
             <Redo2 className="w-3.5 h-3.5" />
           </button>
 
+          {/* Smart Re-break lines button */}
+          <button
+            type="button"
+            onClick={handleSmartRebreak}
+            disabled={captions.length === 0}
+            className="p-1.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-teal-400 text-xs transition-all"
+            title="Smart Break Lines for 9:16 Shorts"
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+          </button>
+
           {/* Global Time Shift Toggle */}
           <button
             type="button"
@@ -351,7 +417,7 @@ export default function CaptionList({
 
       {/* Global Timestamp Shift Drawer */}
       {showShiftControls && (
-        <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl space-y-2 animate-fade-in">
+        <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl space-y-2">
           <div className="flex items-center justify-between text-[11px] text-zinc-400 font-semibold">
             <span>Global Time Offset (Fix Audio Sync)</span>
             <div className="flex items-center gap-1">
@@ -594,13 +660,45 @@ export default function CaptionList({
                   </div>
                 </div>
               ) : (
-                <p
-                  className={`text-sm leading-relaxed ${
-                    isActive ? 'text-white font-bold' : 'text-zinc-200'
-                  }`}
-                >
-                  {cap.text}
-                </p>
+                <div className="space-y-2">
+                  <p
+                    className={`text-sm leading-relaxed ${
+                      isActive ? 'text-white font-bold' : 'text-zinc-200'
+                    }`}
+                  >
+                    {cap.text}
+                  </p>
+
+                  {/* Word-level interactive chips if available */}
+                  {cap.words && Array.isArray(cap.words) && cap.words.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {cap.words.map((w, wIdx) => {
+                        const isWordActive =
+                          currentTime >= w.start &&
+                          (w.end ? currentTime <= w.end : currentTime <= w.start + 0.3);
+
+                        return (
+                          <button
+                            key={wIdx}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSeek(w.start);
+                            }}
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-mono transition-all ${
+                              isWordActive
+                                ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                                : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                            }`}
+                            title={`Jump to ${w.start.toFixed(2)}s`}
+                          >
+                            {w.word}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Length Warning */}

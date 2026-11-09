@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 
 /**
- * Hook to manage state with Undo / Redo history
+ * Hook to manage state with Undo / Redo history (at least 50 steps)
  */
-export function useHistory(initialPresent) {
+export function useHistory(initialPresent, maxSteps = 50) {
   const [past, setPast] = useState([]);
   const [present, setPresent] = useState(initialPresent);
   const [future, setFuture] = useState([]);
@@ -39,20 +39,20 @@ export function useHistory(initialPresent) {
         setPresent((current) => {
           const resolved = newPresent(current);
           if (recordHistory) {
-            setPast((prevPast) => [...prevPast.slice(-30), current]); // keep up to 30 history steps
+            setPast((prevPast) => [...prevPast.slice(-maxSteps), current]);
             setFuture([]);
           }
           return resolved;
         });
       } else {
         if (recordHistory) {
-          setPast((prevPast) => [...prevPast.slice(-30), present]);
+          setPast((prevPast) => [...prevPast.slice(-maxSteps), present]);
           setFuture([]);
         }
         setPresent(newPresent);
       }
     },
-    [present]
+    [present, maxSteps]
   );
 
   const reset = useCallback((newPresent) => {

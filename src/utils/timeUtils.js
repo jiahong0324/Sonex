@@ -5,10 +5,11 @@
  */
 export function secondsToTimeStr(seconds, delimiter = ',') {
   if (seconds < 0 || isNaN(seconds)) seconds = 0;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  const ms = Math.floor((seconds % 1) * 1000);
+  const totalMs = Math.round(seconds * 1000);
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
 
   const h = String(hours).padStart(2, '0');
   const m = String(minutes).padStart(2, '0');
@@ -25,7 +26,7 @@ export function timeStrToSeconds(str) {
   if (!str) return 0;
   const clean = str.trim().replace(',', '.');
   const parts = clean.split(':');
-  
+
   if (parts.length === 3) {
     const hours = parseFloat(parts[0]) || 0;
     const minutes = parseFloat(parts[1]) || 0;
@@ -40,7 +41,7 @@ export function timeStrToSeconds(str) {
 }
 
 /**
- * Format seconds for player display, e.g. "01:24" or "1:02:15"
+ * Format seconds for player display, e.g. "01:24" or "01:02:15"
  */
 export function formatDisplayTime(seconds) {
   if (seconds < 0 || isNaN(seconds)) return '00:00';
@@ -52,7 +53,8 @@ export function formatDisplayTime(seconds) {
   const sStr = String(secs).padStart(2, '0');
 
   if (hours > 0) {
-    return `${hours}:${mStr}:${sStr}`;
+    const hStr = String(hours).padStart(2, '0');
+    return `${hStr}:${mStr}:${sStr}`;
   }
   return `${mStr}:${sStr}`;
 }

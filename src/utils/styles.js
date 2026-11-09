@@ -1,4 +1,4 @@
-// Subtitle styling presets and CSS/FFmpeg generators
+// Subtitle styling presets, color tools, and render configurations
 
 export const STYLE_PRESETS = [
   {
@@ -6,155 +6,442 @@ export const STYLE_PRESETS = [
     name: 'TikTok Bold Yellow',
     tag: 'Trending',
     textColor: '#FFE600',
+    activeWordColor: '#FFFFFF',
     bgColor: '#000000',
     bgOpacity: 0,
     outlineColor: '#000000',
-    outlineThickness: 2.8,
+    outlineThickness: 3.5,
     isBold: true,
-    shadow: 2,
-    previewBg: 'bg-zinc-900',
+    shadowColor: '#000000',
+    shadowBlur: 4,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    animation: 'karaoke',
+    fontFamily: 'Impact, sans-serif',
+  },
+  {
+    id: 'hormozi-green',
+    name: 'Hormozi Viral Green',
+    tag: 'Viral #1',
+    textColor: '#FFFFFF',
+    activeWordColor: '#22C55E',
+    bgColor: '#000000',
+    bgOpacity: 0.15,
+    outlineColor: '#000000',
+    outlineThickness: 4,
+    isBold: true,
+    shadowColor: '#000000',
+    shadowBlur: 5,
+    shadowOffsetX: 2,
+    shadowOffsetY: 4,
+    animation: 'bounce',
+    fontFamily: 'Montserrat, Arial Black, sans-serif',
+  },
+  {
+    id: 'mrbeast',
+    name: 'MrBeast Heavy Outline',
+    tag: 'High CTR',
+    textColor: '#FFFFFF',
+    activeWordColor: '#FFE600',
+    bgColor: '#000000',
+    bgOpacity: 0,
+    outlineColor: '#000000',
+    outlineThickness: 5.5,
+    isBold: true,
+    shadowColor: 'rgba(0,0,0,0.9)',
+    shadowBlur: 6,
+    shadowOffsetX: 3,
+    shadowOffsetY: 5,
+    animation: 'bounce',
+    fontFamily: 'Impact, sans-serif',
   },
   {
     id: 'reels-box',
     name: 'Reels Dark Box',
-    tag: 'Clean',
+    tag: 'Clean Pill',
     textColor: '#FFFFFF',
+    activeWordColor: '#38BDF8',
     bgColor: '#09090B',
-    bgOpacity: 0.75,
+    bgOpacity: 0.85,
     outlineColor: '#000000',
     outlineThickness: 0,
     isBold: true,
-    shadow: 0,
-    previewBg: 'bg-zinc-900',
+    shadowColor: 'transparent',
+    shadowBlur: 0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    animation: 'karaoke',
+    fontFamily: 'system-ui, sans-serif',
   },
   {
     id: 'minimal-clean',
     name: 'Clean White Pro',
     tag: 'Classic',
     textColor: '#FFFFFF',
+    activeWordColor: '#F59E0B',
     bgColor: '#000000',
     bgOpacity: 0,
     outlineColor: '#000000',
     outlineThickness: 2.2,
     isBold: true,
-    shadow: 1.5,
-    previewBg: 'bg-zinc-900',
+    shadowColor: 'rgba(0,0,0,0.7)',
+    shadowBlur: 3,
+    shadowOffsetX: 1,
+    shadowOffsetY: 2,
+    animation: 'karaoke',
+    fontFamily: 'system-ui, sans-serif',
+  },
+  {
+    id: 'pop-bounce',
+    name: 'Word Pop Explosion',
+    tag: 'Dynamic',
+    textColor: '#FBBF24',
+    activeWordColor: '#EF4444',
+    bgColor: '#000000',
+    bgOpacity: 0.2,
+    outlineColor: '#000000',
+    outlineThickness: 3.5,
+    isBold: true,
+    shadowColor: '#000000',
+    shadowBlur: 5,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    animation: 'bounce',
+    fontFamily: 'Arial Black, sans-serif',
   },
   {
     id: 'neon-cyan',
     name: 'Cyberpunk Neon',
     tag: 'Futuristic',
     textColor: '#00F2FE',
-    bgColor: '#000000',
-    bgOpacity: 0.3,
+    activeWordColor: '#FF007F',
+    bgColor: '#050515',
+    bgOpacity: 0.5,
     outlineColor: '#050515',
-    outlineThickness: 2.5,
+    outlineThickness: 3,
     isBold: true,
-    shadow: 3,
-    previewBg: 'bg-zinc-950',
-  },
-  {
-    id: 'cinema-classic',
-    name: 'Cinema Warm',
-    tag: 'Film',
-    textColor: '#FDFCF7',
-    bgColor: '#000000',
-    bgOpacity: 0,
-    outlineColor: '#1A1A1A',
-    outlineThickness: 1.6,
-    isBold: false,
-    shadow: 2,
-    previewBg: 'bg-zinc-900',
+    shadowColor: '#00F2FE',
+    shadowBlur: 8,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    animation: 'karaoke',
+    fontFamily: 'Montserrat, sans-serif',
   },
   {
     id: 'flame-orange',
     name: 'Flame High-Energy',
-    tag: 'Viral',
+    tag: 'Viral Energy',
     textColor: '#FF7A00',
+    activeWordColor: '#FFE600',
     bgColor: '#000000',
     bgOpacity: 0,
     outlineColor: '#000000',
-    outlineThickness: 2.6,
+    outlineThickness: 3.2,
     isBold: true,
-    shadow: 2,
-    previewBg: 'bg-zinc-900',
-  }
+    shadowColor: 'rgba(255, 122, 0, 0.4)',
+    shadowBlur: 6,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    animation: 'bounce',
+    fontFamily: 'Impact, sans-serif',
+  },
+  {
+    id: 'cinema-classic',
+    name: 'Cinema Warm Letter',
+    tag: 'Cinematic',
+    textColor: '#FDFCF7',
+    activeWordColor: '#F59E0B',
+    bgColor: '#000000',
+    bgOpacity: 0,
+    outlineColor: '#1A1A1A',
+    outlineThickness: 1.8,
+    isBold: false,
+    shadowColor: 'rgba(0,0,0,0.8)',
+    shadowBlur: 4,
+    shadowOffsetX: 1,
+    shadowOffsetY: 2,
+    animation: 'none',
+    fontFamily: 'Georgia, serif',
+  },
+  {
+    id: 'karaoke-red',
+    name: 'Karaoke Beat Red',
+    tag: 'Music & Vibe',
+    textColor: '#FFFFFF',
+    activeWordColor: '#EF4444',
+    bgColor: '#18181B',
+    bgOpacity: 0.65,
+    outlineColor: '#000000',
+    outlineThickness: 2.5,
+    isBold: true,
+    shadowColor: 'rgba(239,68,68,0.5)',
+    shadowBlur: 6,
+    shadowOffsetX: 0,
+    shadowOffsetY: 2,
+    animation: 'karaoke',
+    fontFamily: 'system-ui, sans-serif',
+  },
+  {
+    id: 'lavender-dream',
+    name: 'Aesthetic Lavender',
+    tag: 'Lifestyle',
+    textColor: '#E9D5FF',
+    activeWordColor: '#FFFFFF',
+    bgColor: '#581C87',
+    bgOpacity: 0.6,
+    outlineColor: '#3B0764',
+    outlineThickness: 1.5,
+    isBold: true,
+    shadowColor: 'transparent',
+    shadowBlur: 0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    animation: 'karaoke',
+    fontFamily: 'system-ui, sans-serif',
+  },
+  {
+    id: 'gold-luxury',
+    name: 'Luxury Metallic Gold',
+    tag: 'Finance / Wealth',
+    textColor: '#FCD34D',
+    activeWordColor: '#FFFFFF',
+    bgColor: '#1C1917',
+    bgOpacity: 0.7,
+    outlineColor: '#78350F',
+    outlineThickness: 2.8,
+    isBold: true,
+    shadowColor: '#B45309',
+    shadowBlur: 4,
+    shadowOffsetX: 1,
+    shadowOffsetY: 2,
+    animation: 'bounce',
+    fontFamily: 'Montserrat, sans-serif',
+  },
+  {
+    id: 'typewriter',
+    name: 'Retro Typewriter',
+    tag: 'Documentary',
+    textColor: '#E4E4E7',
+    activeWordColor: '#10B981',
+    bgColor: '#09090B',
+    bgOpacity: 0.8,
+    outlineColor: '#000000',
+    outlineThickness: 0,
+    isBold: false,
+    shadowColor: 'transparent',
+    shadowBlur: 0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    animation: 'karaoke',
+    fontFamily: 'Courier New, monospace',
+  },
+  {
+    id: 'sunset-pill',
+    name: 'Sunset Gradient Pill',
+    tag: 'Trendy',
+    textColor: '#FFFFFF',
+    activeWordColor: '#FBBF24',
+    bgColor: '#E11D48',
+    bgOpacity: 0.85,
+    outlineColor: '#881337',
+    outlineThickness: 1,
+    isBold: true,
+    shadowColor: 'rgba(0,0,0,0.5)',
+    shadowBlur: 4,
+    shadowOffsetX: 0,
+    shadowOffsetY: 2,
+    animation: 'bounce',
+    fontFamily: 'system-ui, sans-serif',
+  },
+  {
+    id: 'black-highlighter',
+    name: 'Marker Tag Highlight',
+    tag: 'Podcast / Talks',
+    textColor: '#FFFFFF',
+    activeWordColor: '#FFE600',
+    bgColor: '#000000',
+    bgOpacity: 0.95,
+    outlineColor: '#000000',
+    outlineThickness: 0,
+    isBold: true,
+    shadowColor: 'transparent',
+    shadowBlur: 0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    animation: 'karaoke',
+    fontFamily: 'Impact, Arial Black, sans-serif',
+  },
+  {
+    id: 'comic-hero',
+    name: 'Comic Hero Punch',
+    tag: 'Gaming & Anime',
+    textColor: '#FFF01F',
+    activeWordColor: '#FF0055',
+    bgColor: '#000000',
+    bgOpacity: 0,
+    outlineColor: '#000000',
+    outlineThickness: 5.5,
+    isBold: true,
+    shadowColor: '#000000',
+    shadowBlur: 0,
+    shadowOffsetX: 4,
+    shadowOffsetY: 4,
+    animation: 'bounce',
+    fontFamily: 'Impact, sans-serif',
+  },
+  {
+    id: 'matrix-lime',
+    name: 'Hacker Terminal Matrix',
+    tag: 'Tech & Code',
+    textColor: '#22C55E',
+    activeWordColor: '#86EFAC',
+    bgColor: '#022C22',
+    bgOpacity: 0.75,
+    outlineColor: '#052E16',
+    outlineThickness: 1.5,
+    isBold: true,
+    shadowColor: '#22C55E',
+    shadowBlur: 6,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    animation: 'karaoke',
+    fontFamily: 'monospace',
+  },
+  {
+    id: 'ultra-violet',
+    name: 'Ultra Violet Pop',
+    tag: 'Shorts Beat',
+    textColor: '#C084FC',
+    activeWordColor: '#F472B6',
+    bgColor: '#3B0764',
+    bgOpacity: 0.5,
+    outlineColor: '#000000',
+    outlineThickness: 2.8,
+    isBold: true,
+    shadowColor: '#A855F7',
+    shadowBlur: 5,
+    shadowOffsetX: 1,
+    shadowOffsetY: 2,
+    animation: 'bounce',
+    fontFamily: 'system-ui, sans-serif',
+  },
+  {
+    id: 'emerald-badge',
+    name: 'Emerald Pro Badge',
+    tag: 'Education',
+    textColor: '#FFFFFF',
+    activeWordColor: '#34D399',
+    bgColor: '#064E3B',
+    bgOpacity: 0.8,
+    outlineColor: '#022C22',
+    outlineThickness: 1,
+    isBold: true,
+    shadowColor: 'rgba(0,0,0,0.6)',
+    shadowBlur: 4,
+    shadowOffsetX: 0,
+    shadowOffsetY: 2,
+    animation: 'karaoke',
+    fontFamily: 'system-ui, sans-serif',
+  },
+  {
+    id: 'soft-drop-shadow',
+    name: 'Soft Shadow Floating',
+    tag: 'Modern Minimal',
+    textColor: '#FFFFFF',
+    activeWordColor: '#60A5FA',
+    bgColor: '#000000',
+    bgOpacity: 0,
+    outlineColor: '#000000',
+    outlineThickness: 1.2,
+    isBold: true,
+    shadowColor: 'rgba(0,0,0,0.85)',
+    shadowBlur: 8,
+    shadowOffsetX: 2,
+    shadowOffsetY: 4,
+    animation: 'none',
+    fontFamily: 'system-ui, sans-serif',
+  },
 ];
 
 export const DEFAULT_STYLE = {
   presetId: 'tiktok-yellow',
-  fontSize: 'lg', // sm, md, lg, xl
+  fontSize: 'lg', // sm, md, lg, xl, 2xl
   verticalPosition: 82, // percentage from top (82% = bottom third, perfect for Reels/TikTok)
   textColor: '#FFE600',
+  activeWordColor: '#FFFFFF',
   bgColor: '#000000',
   bgOpacity: 0,
   outlineColor: '#000000',
-  outlineThickness: 2.8,
+  outlineThickness: 3.5,
   isBold: true,
   isUppercase: false,
+  shadowColor: '#000000',
+  shadowBlur: 4,
+  shadowOffsetX: 2,
+  shadowOffsetY: 3,
+  animation: 'karaoke', // 'none' | 'karaoke' | 'bounce' | 'fade'
+  fontFamily: 'Impact, sans-serif',
+  maxCharsPerLine: 24,
 };
 
 /**
- * Creates CSS text-shadow string for realistic smooth outline
+ * Creates CSS text-shadow string for realistic smooth outline (used for DOM fallback/preview cards)
  */
 export function createSmoothOutline(thickness, color) {
-  if (thickness <= 0) return 'none';
-  const steps = 36;
+  if (thickness <= 0 || !color || color === 'transparent') return 'none';
+  const steps = 16;
   const arr = [];
   for (let i = 0; i < steps; i++) {
     const theta = (i * 2 * Math.PI) / steps;
-    const x = (thickness * Math.cos(theta)).toFixed(2);
-    const y = (thickness * Math.sin(theta)).toFixed(2);
-    arr.push(`${x}px ${y}px 1.2px ${color}`);
+    const x = (thickness * Math.cos(theta)).toFixed(1);
+    const y = (thickness * Math.sin(theta)).toFixed(1);
+    arr.push(`${x}px ${y}px 1px ${color}`);
   }
   return arr.join(', ');
 }
 
 /**
- * Convert Hex Color (#RRGGBB) to FFmpeg ASS color format (&H00BBGGRR&)
+ * Convert Hex Color (#RRGGBB) to FFmpeg ASS color format (&H00BBGGRR&) for fallback
  */
 export function hexToAssColor(hex, opacity = 1) {
-  if (!hex || hex === 'none') return '&H00000000';
+  if (!hex || hex === 'none' || hex === 'transparent') return '&H00000000';
   let clean = hex.replace('#', '');
   if (clean.length === 3) {
-    clean = clean.split('').map(c => c + c).join('');
+    clean = clean.split('').map((c) => c + c).join('');
   }
   const r = clean.substring(0, 2);
   const g = clean.substring(2, 4);
   const b = clean.substring(4, 6);
-  
-  // Alpha in ASS is inverse: 00 = fully opaque, FF = fully transparent
-  const alphaVal = Math.round((1 - opacity) * 255).toString(16).padStart(2, '0').toUpperCase();
+  const alphaVal = Math.round((1 - opacity) * 255)
+    .toString(16)
+    .padStart(2, '0')
+    .toUpperCase();
   return `&H${alphaVal}${b}${g}${r}&`;
 }
 
 /**
- * Generate FFmpeg subtitles filter string
+ * Generate FFmpeg subtitles filter string (for Level 3 fallback)
  */
 export function generateFFmpegSubStyle(styleConfig) {
   const fontSizes = {
-    sm: 18,
-    md: 22,
-    lg: 26,
-    xl: 32
+    sm: 20,
+    md: 26,
+    lg: 32,
+    xl: 40,
+    '2xl': 50,
   };
-  const size = fontSizes[styleConfig.fontSize] || 24;
+  const size = fontSizes[styleConfig.fontSize] || 32;
   const primaryColor = hexToAssColor(styleConfig.textColor, 1);
   const outlineColor = hexToAssColor(styleConfig.outlineColor, 1);
-  
-  const backColor = styleConfig.bgOpacity > 0 
-    ? hexToAssColor(styleConfig.bgColor, styleConfig.bgOpacity)
-    : '&HFF000000'; // transparent
-
+  const backColor =
+    styleConfig.bgOpacity > 0
+      ? hexToAssColor(styleConfig.bgColor, styleConfig.bgOpacity)
+      : '&HFF000000';
   const outline = styleConfig.outlineThickness || 0;
   const bold = styleConfig.isBold ? 1 : 0;
-  
-  // Vertical margin in ASS (Alignment=2 is bottom centered)
-  // verticalPosition is % from top, so margin from bottom is roughly (100 - verticalPosition)
   const marginV = Math.round(Math.max(20, (100 - (styleConfig.verticalPosition || 82)) * 6.5));
 
-  // ASS style options
-  const styleStr = [
+  return [
     `PrimaryColour=${primaryColor}`,
     `OutlineColour=${outlineColor}`,
     `Outline=${outline}`,
@@ -163,8 +450,6 @@ export function generateFFmpegSubStyle(styleConfig) {
     `MarginV=${marginV}`,
     `Alignment=2`,
     `FontSize=${size}`,
-    `Bold=${bold}`
+    `Bold=${bold}`,
   ].join(',');
-
-  return styleStr;
 }

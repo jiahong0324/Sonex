@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       workbox: {
-        globIgnores: ['**/ffmpeg-core.wasm', '**/font.ttf', '**/ffmpeg-core.js']
+        globIgnores: ['**/ffmpeg-core.wasm', '**/font.ttf', '**/ffmpeg-core.js', '**/*.wasm']
       },
       manifest: {
         name: 'Sonex Caption Master',

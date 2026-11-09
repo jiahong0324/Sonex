@@ -1,5 +1,5 @@
 import { STYLE_PRESETS, createSmoothOutline } from '../utils/styles';
-import { Palette, Check, Sparkles, Sliders } from 'lucide-react';
+import { Palette, Check, Sparkles, Sliders, Film } from 'lucide-react';
 
 export default function StyleConfigurator({ styleConfig, setStyleConfig, showFeedback }) {
   const handleSelectPreset = (preset) => {
@@ -7,11 +7,18 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
       ...prev,
       presetId: preset.id,
       textColor: preset.textColor,
+      activeWordColor: preset.activeWordColor || '#FFFFFF',
       bgColor: preset.bgColor,
       bgOpacity: preset.bgOpacity,
       outlineColor: preset.outlineColor,
       outlineThickness: preset.outlineThickness,
       isBold: preset.isBold,
+      animation: preset.animation || 'karaoke',
+      fontFamily: preset.fontFamily || 'Impact, sans-serif',
+      shadowColor: preset.shadowColor || '#000000',
+      shadowBlur: preset.shadowBlur || 4,
+      shadowOffsetX: preset.shadowOffsetX || 2,
+      shadowOffsetY: preset.shadowOffsetY || 3,
     }));
     showFeedback('success', `Applied preset: ${preset.name}`);
   };
@@ -34,12 +41,13 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
         </p>
       </div>
 
-      {/* Preset Cards Grid */}
+      {/* Preset Cards Grid (20+ Viral Presets) */}
       <div className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-          Popular Viral Presets
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+          <Film className="w-4 h-4 text-emerald-400" />
+          <span>Viral Social Media Presets ({STYLE_PRESETS.length})</span>
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
           {STYLE_PRESETS.map((preset) => {
             const isSelected = styleConfig.presetId === preset.id;
             const outline = createSmoothOutline(preset.outlineThickness, preset.outlineColor);
@@ -48,30 +56,31 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
               <div
                 key={preset.id}
                 onClick={() => handleSelectPreset(preset)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between h-32 ${
+                className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between h-28 ${
                   isSelected
                     ? 'border-emerald-500 bg-emerald-500/[0.08] shadow-lg shadow-emerald-500/10'
                     : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 hover:bg-zinc-900'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white">{preset.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-semibold">
-                      {preset.tag}
-                    </span>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="text-xs font-bold text-white truncate">{preset.name}</span>
                   </div>
-                  {isSelected && (
-                    <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center">
+                  {isSelected ? (
+                    <div className="w-4 h-4 rounded-full bg-emerald-500 text-black flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3 stroke-[3]" />
                     </div>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-400 font-semibold shrink-0">
+                      {preset.tag}
+                    </span>
                   )}
                 </div>
 
                 {/* Mini Preview Box */}
-                <div className="bg-black/70 rounded-xl p-2.5 text-center flex items-center justify-center border border-zinc-800/80">
+                <div className="bg-black/80 rounded-xl p-2 text-center flex items-center justify-center border border-zinc-850">
                   <span
-                    className={`text-sm ${preset.isBold ? 'font-black' : 'font-semibold'} leading-tight`}
+                    className={`text-xs ${preset.isBold ? 'font-black' : 'font-semibold'} leading-tight truncate`}
                     style={{
                       color: preset.textColor,
                       textShadow: outline,
@@ -81,11 +90,12 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
                               .toString(16)
                               .padStart(2, '0')}`
                           : 'transparent',
-                      padding: preset.bgOpacity > 0 ? '3px 8px' : '0',
-                      borderRadius: preset.bgOpacity > 0 ? '6px' : '0',
+                      padding: preset.bgOpacity > 0 ? '2px 6px' : '0',
+                      borderRadius: preset.bgOpacity > 0 ? '4px' : '0',
+                      fontFamily: preset.fontFamily,
                     }}
                   >
-                    Sample Viral Caption
+                    Viral Caption
                   </span>
                 </div>
               </div>
@@ -101,6 +111,39 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-300">
             <Sliders className="w-4 h-4 text-emerald-400" />
             <span>Custom Style Tweaks</span>
+          </div>
+
+          {/* Animation & Font Family */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400 font-semibold">Word Animation</label>
+              <select
+                value={styleConfig.animation || 'karaoke'}
+                onChange={(e) => setStyleConfig((p) => ({ ...p, animation: e.target.value }))}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="karaoke">Karaoke (Word by Word Color)</option>
+                <option value="bounce">Word Pop & Bounce</option>
+                <option value="fade">Gentle Line Fade In</option>
+                <option value="none">Static (No Animation)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-400 font-semibold">Font Family</label>
+              <select
+                value={styleConfig.fontFamily || 'Impact, sans-serif'}
+                onChange={(e) => setStyleConfig((p) => ({ ...p, fontFamily: e.target.value }))}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Impact, sans-serif">Impact (Viral Shorts Standard)</option>
+                <option value="Montserrat, Arial Black, sans-serif">Montserrat Bold</option>
+                <option value="Arial Black, sans-serif">Arial Black (Heavy)</option>
+                <option value="system-ui, sans-serif">System Sans-Serif</option>
+                <option value="Georgia, serif">Georgia (Cinematic)</option>
+                <option value="Courier New, monospace">Courier (Typewriter)</option>
+              </select>
+            </div>
           </div>
 
           {/* Font Size Selector */}
@@ -162,24 +205,26 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
 
           {/* Colors & Outline Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Text Color */}
+            {/* Text Color & Active Word Color */}
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400 font-semibold">Text Color</label>
+              <label className="text-xs text-zinc-400 font-semibold">Text Color & Active Word</label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={styleConfig.textColor}
                   onChange={(e) => setStyleConfig((p) => ({ ...p, textColor: e.target.value }))}
                   className="w-8 h-8 rounded-lg border border-zinc-700 bg-transparent cursor-pointer"
+                  title="Base Text Color"
                 />
                 <input
-                  type="text"
-                  value={styleConfig.textColor}
-                  onChange={(e) => setStyleConfig((p) => ({ ...p, textColor: e.target.value }))}
-                  className="w-28 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-white font-mono"
+                  type="color"
+                  value={styleConfig.activeWordColor || '#FFFFFF'}
+                  onChange={(e) => setStyleConfig((p) => ({ ...p, activeWordColor: e.target.value }))}
+                  className="w-8 h-8 rounded-lg border border-zinc-700 bg-transparent cursor-pointer"
+                  title="Active Highlighted Word Color"
                 />
                 <div className="flex gap-1">
-                  {['#FFE600', '#FFFFFF', '#00F2FE', '#FF6B00'].map((col) => (
+                  {['#FFE600', '#FFFFFF', '#00F2FE', '#22C55E', '#FF7A00'].map((col) => (
                     <button
                       key={col}
                       type="button"
@@ -201,7 +246,7 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
                 <input
                   type="range"
                   min="0"
-                  max="4"
+                  max="6"
                   step="0.2"
                   value={styleConfig.outlineThickness}
                   onChange={(e) =>
@@ -332,6 +377,7 @@ export default function StyleConfigurator({ styleConfig, setStyleConfig, showFee
                       : 'transparent',
                   padding: styleConfig.bgOpacity > 0 ? '4px 10px' : '0',
                   borderRadius: styleConfig.bgOpacity > 0 ? '8px' : '0',
+                  fontFamily: styleConfig.fontFamily,
                 }}
               >
                 THIS IS HOW YOUR CAPTIONS LOOK

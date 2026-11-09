@@ -15,8 +15,7 @@ import Toast from './components/Toast';
 import { useHistory } from './hooks/useHistory';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { performAudioExtraction } from './utils/audioExtractor';
-import { secondsToTimeStr } from './utils/timeUtils';
-import { getWrappedText } from './utils/srtParser';
+import { transcribeWithWhisper, transcribeWithGroq } from './utils/transcriber';
 import { DEFAULT_STYLE } from './utils/styles';
 
 export default function App() {
@@ -36,15 +35,18 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
 
-  // Subtitles State with Undo / Redo
-  const [captions, setCaptions, { undo, redo, canUndo, canRedo, reset: resetCaptions }] = useHistory([]);
+  // Subtitles State with 50-step Undo / Redo
+  const [captions, setCaptions, { undo, redo, canUndo, canRedo, reset: resetCaptions }] = useHistory([], 50);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const [styleConfig, setStyleConfig] = useState(DEFAULT_STYLE);
 
   // Transcription Configuration
+  const [transcriptionMode, setTranscriptionMode] = useState('local'); // 'local' (free / no key) | 'cloud' (Groq)
+  const [localModel, setLocalModel] = useState('onnx-community/whisper-tiny_timestamped');
+  const [preferredDevice, setPreferredDevice] = useState('auto');
+  const [transcriptionTask, setTranscriptionTask] = useState('transcribe');
   const [selectedModel, setSelectedModel] = useState('whisper-large-v3');
   const [selectedLanguage, setSelectedLanguage] = useState('auto');
-  const [extractionMethod, setExtractionMethod] = useState('extract');
   const [customPrompt, setCustomPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
@@ -131,11 +133,6 @@ export default function App() {
     setCurrentTime(0);
 
     showFeedback('success', `Loaded: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
-
-    // Auto toggle extraction method if file > 25MB
-    if (file.size > 25 * 1024 * 1024) {
-      setExtractionMethod('extract');
-    }
   };
 
   // Drag and drop handlers on document window
@@ -223,170 +220,73 @@ export default function App() {
     return () => vid.removeEventListener('loadedmetadata', onLoadedMetadata);
   }, [videoUrl]);
 
-  // AI Transcription Handler
+  // AI Speech Recognition Trigger (Local Whisper WebGPU / WASM + Groq Cloud option)
   const handleGenerateCaptions = async () => {
-    if (!apiKey.trim()) {
-      showFeedback('error', 'Please provide a Groq API Key first.');
-      if (!hasEnvKey) setIsApiKeyOpen(true);
-      return;
-    }
     if (!videoFile) {
       showFeedback('error', 'Please upload or select a video file first.');
       return;
     }
 
+    if (transcriptionMode === 'cloud' && !apiKey.trim()) {
+      showFeedback('error', 'Please provide a Groq API Key first for cloud mode.');
+      if (!hasEnvKey) setIsApiKeyOpen(true);
+      return;
+    }
+
     setIsProcessing(true);
     setProcessProgress(5);
-    setProcessStep('Starting AI transcription pipeline...');
+    setProcessStep('Starting AI speech transcription...');
 
     try {
-      let fileToSend = videoFile;
+      if (transcriptionMode === 'local') {
+        const result = await transcribeWithWhisper({
+          videoFile,
+          modelName: localModel,
+          language: selectedLanguage,
+          task: transcriptionTask,
+          preferredDevice,
+          onProgress: (prog) => {
+            setProcessProgress(prog.percent || 10);
+            setProcessStep(prog.message || 'Processing in Web Worker...');
+          },
+        });
 
-      // In-browser Audio Extraction
-      if (extractionMethod === 'extract') {
-        setProcessStep('Extracting audio track in browser (16kHz WAV)...');
-        try {
-          const audioBlob = await performAudioExtraction(videoFile, (prog, step) => {
-            setProcessProgress(Math.round(5 + prog * 0.4));
-            setProcessStep(step);
-          });
-          fileToSend = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
-          showFeedback('success', `Extracted compact audio track: ${(fileToSend.size / (1024 * 1024)).toFixed(2)} MB`);
-        } catch (err) {
-          console.warn('Audio extraction warning:', err);
-          showFeedback('error', `${err.message}. Retrying with direct file upload...`);
-          fileToSend = videoFile;
+        if (!result.captions || result.captions.length === 0) {
+          throw new Error('No speech detected in this video segment.');
         }
-      }
 
-      // Check Groq 25MB limit
-      if (fileToSend.size > 25 * 1024 * 1024) {
-        throw new Error(
-          'Payload exceeds 25MB limit. Please ensure "In-Browser Audio Extraction" is checked.'
+        resetCaptions(result.captions);
+        setProcessProgress(100);
+        showFeedback(
+          'success',
+          `Generated ${result.captions.length} captions locally on ${result.device ? result.device.toUpperCase() : 'device'}!`
         );
-      }
-
-      setProcessStep('Sending payload to Groq Whisper LPU™...');
-      setProcessProgress(50);
-
-      const formData = new FormData();
-      formData.append('file', fileToSend);
-      formData.append('model', selectedModel);
-      formData.append('response_format', 'verbose_json');
-
-      if (selectedLanguage && selectedLanguage !== 'auto') {
-        formData.append('language', selectedLanguage);
-      }
-
-      let promptText = customPrompt.trim();
-      if (!promptText) {
-        if (selectedLanguage === 'zh') {
-          promptText = '输出标准的专业字幕标点符号和语句。';
-        } else {
-          promptText = 'Export with standard professional subtitling punctuation and phrasing.';
-        }
-      }
-      formData.append('prompt', promptText);
-
-      const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `API error (${response.status})`);
-      }
-
-      setProcessStep('Structuring sentences & formatting timestamps...');
-      setProcessProgress(88);
-
-      const resJson = await response.json();
-      if (!resJson.segments || !Array.isArray(resJson.segments)) {
-        throw new Error('API returned successfully but no transcription segments were found.');
-      }
-
-      // Intelligent post-processing: split long segments into punchy social media subtitle chunks
-      const refinedSegments = [];
-      resJson.segments.forEach((seg) => {
-        const text = seg.text.trim();
-        if (!text) return;
-
-        // Split by standard punctuation to keep ideas grouped
-        const chunks = text.match(/(.*?[，。？！,.?!；;]+|.+)/g) || [text];
-        const finalChunks = [];
-
-        chunks.forEach((chunk) => {
-          const c = chunk.trim();
-          if (!c) return;
-          const hasChinese = /[\u4e00-\u9fa5]/.test(c);
-          const maxLen = hasChinese ? 14 : 26;
-
-          if (c.length <= maxLen) {
-            finalChunks.push(c);
-          } else {
-            if (hasChinese) {
-              const parts = Math.ceil(c.length / maxLen);
-              const splitLen = Math.ceil(c.length / parts);
-              for (let i = 0; i < c.length; i += splitLen) {
-                finalChunks.push(c.substring(i, i + splitLen));
-              }
-            } else {
-              const words = c.split(/\s+/);
-              let currentChunk = '';
-              for (let word of words) {
-                if ((currentChunk + ' ' + word).trim().length <= maxLen) {
-                  currentChunk = (currentChunk + ' ' + word).trim();
-                } else {
-                  if (currentChunk) finalChunks.push(currentChunk);
-                  currentChunk = word;
-                }
-              }
-              if (currentChunk) finalChunks.push(currentChunk);
-            }
-          }
+        setActiveTab('studio');
+      } else {
+        // Cloud Mode via Groq
+        setProcessStep('Extracting audio track for cloud upload...');
+        const audioBlob = await performAudioExtraction(videoFile, (prog, step) => {
+          setProcessProgress(Math.round(5 + prog * 0.3));
+          setProcessStep(step);
         });
 
-        const totalChars = finalChunks.reduce((acc, c) => acc + c.length, 0);
-        const duration = seg.end - seg.start;
-        let segTime = seg.start;
-
-        finalChunks.forEach((chunk) => {
-          const chunkDuration = totalChars > 0 ? (chunk.length / totalChars) * duration : duration;
-          const cleanText = chunk.replace(/[，。？！,.?!；;]+$/, '').trim();
-
-          if (cleanText) {
-            refinedSegments.push({
-              start: segTime,
-              end: segTime + chunkDuration,
-              text: cleanText,
-            });
-          }
-          segTime += chunkDuration;
+        const cloudCaptions = await transcribeWithGroq({
+          audioBlob,
+          apiKey,
+          model: selectedModel,
+          language: selectedLanguage,
+          prompt: customPrompt,
+          onProgress: (prog, step) => {
+            setProcessProgress(prog);
+            setProcessStep(step);
+          },
         });
-      });
 
-      // Construct structured caption blocks
-      const parsed = refinedSegments.map((seg, index) => {
-        return {
-          id: index + 1,
-          startTime: seg.start,
-          endTime: seg.end,
-          startStr: secondsToTimeStr(seg.start),
-          endStr: secondsToTimeStr(seg.end),
-          text: getWrappedText(seg.text),
-        };
-      });
-
-      setCaptions(parsed);
-      setProcessProgress(100);
-      showFeedback('success', `Generated ${parsed.length} accurate captions successfully!`);
-
-      // Switch to Studio tab immediately for editing
-      setActiveTab('studio');
+        resetCaptions(cloudCaptions);
+        setProcessProgress(100);
+        showFeedback('success', `Generated ${cloudCaptions.length} captions via Groq Whisper!`);
+        setActiveTab('studio');
+      }
     } catch (err) {
       console.error(err);
       showFeedback('error', err.message || 'Transcription failed.');
@@ -484,17 +384,23 @@ export default function App() {
         {/* TAB 3: AI TRANSCRIBE */}
         {activeTab === 'transcribe' && (
           <TranscriptionSettings
+            transcriptionMode={transcriptionMode}
+            setTranscriptionMode={setTranscriptionMode}
             apiKey={userApiKey}
             onKeyChange={handleKeyChange}
             saveKey={saveKey}
             setSaveKey={setSaveKey}
             hasEnvKey={hasEnvKey}
+            localModel={localModel}
+            setLocalModel={setLocalModel}
+            preferredDevice={preferredDevice}
+            setPreferredDevice={setPreferredDevice}
+            transcriptionTask={transcriptionTask}
+            setTranscriptionTask={setTranscriptionTask}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             selectedLanguage={selectedLanguage}
             setSelectedLanguage={setSelectedLanguage}
-            extractionMethod={extractionMethod}
-            setExtractionMethod={setExtractionMethod}
             customPrompt={customPrompt}
             setCustomPrompt={setCustomPrompt}
             isProcessing={isProcessing}
@@ -505,7 +411,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: EXPORT & HARD-SUB BURN */}
+        {/* TAB 4: EXPORT & HARD-SUB BURN (P0) */}
         {activeTab === 'export' && (
           <ExportPanel
             videoFile={videoFile}

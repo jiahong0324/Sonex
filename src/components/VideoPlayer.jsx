@@ -10,10 +10,10 @@ import {
   EyeOff,
   Gauge,
   Upload,
+  Smartphone,
 } from 'lucide-react';
-import { createSmoothOutline } from '../utils/styles';
 import { formatDisplayTime } from '../utils/timeUtils';
-import { getWrappedText } from '../utils/srtParser';
+import { drawCaptionFrame, drawSafeZones } from '../utils/captionRenderer';
 
 export default function VideoPlayer({
   videoRef,
@@ -30,10 +30,12 @@ export default function VideoPlayer({
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSubtitles, setShowSubtitles] = useState(true);
+  const [showSafeZones, setShowSafeZones] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCssFullscreen, setIsCssFullscreen] = useState(false);
 
   const containerRef = useRef(null);
+  const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // Sync play/pause state from video events
@@ -110,47 +112,60 @@ export default function VideoPlayer({
     }
   };
 
-  // Determine current active caption
-  const activeCaption = captions.find(
-    (cap) => currentTime >= cap.startTime && currentTime <= cap.endTime
-  );
+  // 100% WYSIWYG Subtitle Canvas Rendering Loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
 
-  // Compute subtitle text style based on styleConfig
-  const isFsMode = isFullscreen || isCssFullscreen;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-  const getFontSizeClass = (size) => {
-    if (isFsMode) {
-      switch (size) {
-        case 'sm':
-          return 'text-2xl';
-        case 'md':
-          return 'text-3xl';
-        case 'lg':
-          return 'text-4xl';
-        case 'xl':
-          return 'text-5xl';
-        default:
-          return 'text-4xl';
+    let animId = null;
+
+    const render = () => {
+      const w = video.videoWidth || 1080;
+      const h = video.videoHeight || 1920;
+
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
       }
-    }
-    switch (size) {
-      case 'sm':
-        return 'text-sm sm:text-base';
-      case 'md':
-        return 'text-base sm:text-lg';
-      case 'lg':
-        return 'text-lg sm:text-xl md:text-2xl';
-      case 'xl':
-        return 'text-xl sm:text-2xl md:text-3xl';
-      default:
-        return 'text-xl';
-    }
-  };
 
-  const smoothOutline = createSmoothOutline(
-    isFsMode ? styleConfig.outlineThickness * 1.5 : styleConfig.outlineThickness,
-    styleConfig.outlineColor
-  );
+      ctx.clearRect(0, 0, w, h);
+
+      if (showSafeZones) {
+        drawSafeZones(ctx, w, h, 'tiktok');
+      }
+
+      if (showSubtitles) {
+        const time = video.currentTime || currentTime;
+        const activeCaption = captions.find(
+          (c) => time >= c.startTime && time <= c.endTime
+        );
+
+        if (activeCaption) {
+          drawCaptionFrame(ctx, activeCaption, time, styleConfig, {
+            width: w,
+            height: h,
+            showSafeZones: false,
+          });
+        }
+      }
+
+      if (!video.paused && !video.ended) {
+        animId = requestAnimationFrame(render);
+      }
+    };
+
+    render();
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [currentTime, captions, styleConfig, showSubtitles, showSafeZones, videoRef]);
+
+  const isFsMode = isFullscreen || isCssFullscreen;
 
   return (
     <div className="space-y-3">
@@ -165,67 +180,33 @@ export default function VideoPlayer({
       >
         {videoUrl ? (
           <>
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              playsInline
-              webkit-playsinline="true"
-              controlsList="nofullscreen"
-              className="h-full w-auto object-contain max-w-full cursor-pointer"
-              onClick={togglePlay}
-              onPlay={handlePlay}
-              onPause={handlePause}
-              onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-              onLoadedMetadata={(e) => {
-                const { videoWidth, videoHeight, duration: vidDuration } = e.target;
-                if (videoWidth && videoHeight) {
-                  setVideoAspectRatio(`${videoWidth}/${videoHeight}`);
-                }
-                setDuration(vidDuration || 0);
-              }}
-            />
-
-            {/* Custom Subtitle Overlay */}
-            {showSubtitles && activeCaption && (
-              <div
-                className="absolute inset-0 pointer-events-none flex justify-center"
-                style={{
-                  aspectRatio: videoAspectRatio || '16/9',
-                  height: '100%',
-                  maxWidth: '100%',
+            <div className="relative h-full w-auto max-w-full flex items-center justify-center">
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                playsInline
+                webkit-playsinline="true"
+                controlsList="nofullscreen"
+                className="h-full w-auto object-contain max-w-full cursor-pointer"
+                onClick={togglePlay}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                onLoadedMetadata={(e) => {
+                  const { videoWidth, videoHeight, duration: vidDuration } = e.target;
+                  if (videoWidth && videoHeight) {
+                    setVideoAspectRatio(`${videoWidth}/${videoHeight}`);
+                  }
+                  setDuration(vidDuration || 0);
                 }}
-              >
-                <div
-                  className="absolute left-4 right-4 text-center transition-all duration-75 px-4"
-                  style={{
-                    top: `${styleConfig.verticalPosition || 82}%`,
-                    transform: 'translateY(-50%)',
-                  }}
-                >
-                  <span
-                    className={`inline-block font-sans break-words whitespace-pre-wrap leading-[1.4] transition-all ${
-                      styleConfig.isBold ? 'font-black' : 'font-medium'
-                    } ${styleConfig.isUppercase ? 'uppercase' : ''} ${getFontSizeClass(
-                      styleConfig.fontSize
-                    )}`}
-                    style={{
-                      color: styleConfig.textColor || '#ffffff',
-                      textShadow: smoothOutline,
-                      backgroundColor:
-                        styleConfig.bgOpacity > 0
-                          ? `${styleConfig.bgColor}${Math.round(styleConfig.bgOpacity * 255)
-                              .toString(16)
-                              .padStart(2, '0')}`
-                          : 'transparent',
-                      padding: styleConfig.bgOpacity > 0 ? '6px 16px' : '0',
-                      borderRadius: styleConfig.bgOpacity > 0 ? '10px' : '0',
-                    }}
-                  >
-                    {getWrappedText(activeCaption.text)}
-                  </span>
-                </div>
-              </div>
-            )}
+              />
+
+              {/* Exact Synchronized Canvas Overlay (Shared drawCaptionFrame) */}
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none z-10"
+              />
+            </div>
 
             {/* Floating Quick Action Overlay Buttons (Top Right) */}
             <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity z-20">
@@ -241,6 +222,20 @@ export default function VideoPlayer({
                 title={showSubtitles ? 'Hide Subtitles' : 'Show Subtitles'}
               >
                 {showSubtitles ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+              </button>
+
+              {/* Toggle TikTok/Reels Safe Zone Overlay */}
+              <button
+                type="button"
+                onClick={() => setShowSafeZones(!showSafeZones)}
+                className={`p-2 rounded-xl backdrop-blur-md transition-all text-xs font-semibold flex items-center gap-1 ${
+                  showSafeZones
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30'
+                    : 'bg-black/60 text-zinc-400 border border-zinc-800 hover:text-white'
+                }`}
+                title={showSafeZones ? 'Hide UI Safe Zone' : 'Show TikTok/Reels UI Safe Zone'}
+              >
+                <Smartphone className="w-4 h-4" />
               </button>
 
               {/* Speed Controller */}
