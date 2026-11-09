@@ -1,230 +1,72 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import localforage from 'localforage';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
-
-// --- Global Config & Helpers ---
-
-const createSmoothOutline = (thickness, color) => {
-  const steps = 64;
-  const arr = [];
-  for (let i = 0; i < steps; i++) {
-    const theta = (i * 2 * Math.PI) / steps;
-    const x = (thickness * Math.cos(theta)).toFixed(2);
-    const y = (thickness * Math.sin(theta)).toFixed(2);
-    arr.push(`${x}px ${y}px 1.2px ${color}`);
-  }
-  return arr.join(', ');
-};
-
-const SMOOTH_OUTLINE_FULLSCREEN = createSmoothOutline(2.5, '#000');
-const SMOOTH_OUTLINE_NORMAL = createSmoothOutline(1.8, '#000');
-
-// Standard PCM WAV encoder to convert decoded browser AudioBuffer to 16kHz mono WAV
-function bufferToWav(buffer) {
-  const numOfChan = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const format = 1; // 1 = Raw PCM
-  const bitDepth = 16;
-  
-  let result;
-  if (numOfChan === 2) {
-    // Merge channels to mono
-    const c0 = buffer.getChannelData(0);
-    const c1 = buffer.getChannelData(1);
-    const len = buffer.length;
-    result = new Float32Array(len);
-    for (let i = 0; i < len; i++) {
-      result[i] = (c0[i] + c1[i]) / 2;
-    }
-  } else {
-    result = buffer.getChannelData(0);
-  }
-
-  const bufferLength = result.length * 2; // 16-bit is 2 bytes per sample
-  const wavBuffer = new ArrayBuffer(44 + bufferLength);
-  const view = new DataView(wavBuffer);
-
-  const writeString = (offset, string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  writeString(0, 'RIFF');
-  view.setUint32(4, 36 + bufferLength, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, format, true);
-  view.setUint16(22, 1, true); // Mono channel
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // Byte rate
-  view.setUint16(32, 2, true); // Block align
-  view.setUint16(34, bitDepth, true);
-  writeString(36, 'data');
-  view.setUint32(40, bufferLength, true);
-
-  // Write samples
-  let offset = 44;
-  const len = result.length;
-  for (let i = 0; i < len; i++) {
-    let sample = Math.max(-1, Math.min(1, result[i]));
-    sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-    view.setInt16(offset, sample, true);
-    offset += 2;
-  }
-
-  return new Blob([view], { type: 'audio/wav' });
-}
-
-
-// Convert seconds back to "HH:MM:SS,mmm" formatted exactly
-function secondsToTimeStr(seconds) {
-  if (seconds < 0) seconds = 0;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  const ms = Math.floor((seconds % 1) * 1000);
-
-  const h = String(hours).padStart(2, '0');
-  const m = String(minutes).padStart(2, '0');
-  const s = String(secs).padStart(2, '0');
-  const msStr = String(ms).padStart(3, '0');
-
-  return `${h}:${m}:${s},${msStr}`;
-}
-
-// Helper to enforce single-line captions, but explicitly wrap to a new line if too long
-// This prevents CapCut from auto-justifying and creating huge spaces on older long captions
-function getWrappedText(text) {
-  if (!text) return text;
-  
-  // Clean up any weird double spaces or existing newlines
-  const cleanText = text.replace(/\s+/g, ' ').trim();
-  
-  const limit = 26; // Max characters per line before forcing a clean newline
-  if (cleanText.length <= limit) return cleanText;
-
-  const hasChinese = /[\u4e00-\u9fa5]/.test(cleanText);
-  const lines = [];
-  
-  if (hasChinese) {
-    for (let i = 0; i < cleanText.length; i += limit) {
-      lines.push(cleanText.substring(i, i + limit));
-    }
-  } else {
-    const words = cleanText.split(' ');
-    let currentLine = '';
-    for (let word of words) {
-      if ((currentLine + ' ' + word).trim().length <= limit) {
-        currentLine = (currentLine + ' ' + word).trim();
-      } else {
-        if (currentLine) lines.push(currentLine);
-        currentLine = word;
-      }
-    }
-    if (currentLine) lines.push(currentLine);
-  }
-  
-  return lines.join('\n');
-}
-
-// Formatter to recreate SRT
-function formatSRT(captions, addSpacing = false) {
-  return captions
-    .map((cap, index) => {
-      let wrappedText = getWrappedText(cap.text);
-      if (addSpacing) {
-        wrappedText = wrappedText.replace(/\n/g, '\n{\\alpha&HFF&}{\\fs24}.{\\fs24}{\\alpha&H00&}\n');
-      }
-      return `${index + 1}\n${cap.startStr} --> ${cap.endStr}\n${wrappedText}`;
-    })
-    .join('\n\n');
-}
-
-// Exponential backoff wrapper for reliable API execution
-async function fetchWithBackoff(url, options, maxRetries = 5) {
-  let delay = 1000;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(url, options);
-      if (response.ok) {
-        return response;
-      }
-      // Fail fast on typical client authentication/parameter issues
-      if (response.status === 400 || response.status === 401 || response.status === 403) {
-        return response;
-      }
-    } catch (err) {
-      if (i === maxRetries - 1) throw err;
-    }
-    await new Promise(resolve => setTimeout(resolve, delay));
-    delay *= 2;
-  }
-  throw new Error("Failed after multiple automatic retry attempts.");
-}
+import Header from './components/Header';
+import VideoPlayer from './components/VideoPlayer';
+import VisualTimeline from './components/VisualTimeline';
+import CaptionList from './components/CaptionList';
+import StyleConfigurator from './components/StyleConfigurator';
+import TranscriptionSettings from './components/TranscriptionSettings';
+import ExportPanel from './components/ExportPanel';
+import BatchFindReplaceModal from './components/BatchFindReplaceModal';
+import ImportSubtitleModal from './components/ImportSubtitleModal';
+import KeyboardShortcutModal from './components/KeyboardShortcutModal';
+import ApiKeyModal from './components/ApiKeyModal';
+import Toast from './components/Toast';
+import { useHistory } from './hooks/useHistory';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { performAudioExtraction } from './utils/audioExtractor';
+import { secondsToTimeStr } from './utils/timeUtils';
+import { getWrappedText } from './utils/srtParser';
+import { DEFAULT_STYLE } from './utils/styles';
 
 export default function App() {
   const envApiKey = import.meta.env.VITE_GROQ_API_KEY || '';
   const [apiKey, setApiKey] = useState(() => envApiKey || localStorage.getItem('groq_api_key') || '');
   const [saveKey, setSaveKey] = useState(true);
+
+  // Workflow Tabs: 'studio', 'style', 'transcribe', 'export'
+  const [activeTab, setActiveTab] = useState('studio');
+
+  // Video State
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState('');
   const [videoAspectRatio, setVideoAspectRatio] = useState('16/9');
-  const [captions, setCaptions] = useState([]);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+
+  // Subtitles State with Undo / Redo
+  const [captions, setCaptions, { undo, redo, canUndo, canRedo, reset: resetCaptions }] = useHistory([]);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
-  const [isStateRestored, setIsStateRestored] = useState(false);
+  const [styleConfig, setStyleConfig] = useState(DEFAULT_STYLE);
 
-  // Restore state from IndexedDB on mount
-  useEffect(() => {
-    async function restoreState() {
-      try {
-        const storedCaptions = await localforage.getItem('sonex_captions');
-        if (storedCaptions) setCaptions(storedCaptions);
-
-        const storedFile = await localforage.getItem('sonex_videoFile');
-        if (storedFile) {
-          setVideoFile(storedFile);
-          setVideoUrl(URL.createObjectURL(storedFile));
-        }
-      } catch (err) {
-        console.error('Failed to restore offline state', err);
-      }
-      setIsStateRestored(true);
-    }
-    restoreState();
-  }, []);
-
-  // Auto-save state changes
-  useEffect(() => {
-    if (isStateRestored) {
-      localforage.setItem('sonex_captions', captions);
-    }
-  }, [captions, isStateRestored]);
-
-
-  const [extractionMethod, setExtractionMethod] = useState('extract'); // 'extract' or 'direct'
-  const [selectedModel, setSelectedModel] = useState('whisper-large-v3'); // 'whisper-large-v3' or 'whisper-large-v3-turbo'
-  const [selectedLanguage, setSelectedLanguage] = useState('auto'); // 'auto', 'en', 'zh'
+  // Transcription Configuration
+  const [selectedModel, setSelectedModel] = useState('whisper-large-v3');
+  const [selectedLanguage, setSelectedLanguage] = useState('auto');
+  const [extractionMethod, setExtractionMethod] = useState('extract');
+  const [customPrompt, setCustomPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
   const [processProgress, setProcessProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [timeOffset, setTimeOffset] = useState(0);
-  const [editCapId, setEditCapId] = useState(null);
-  const [editText, setEditText] = useState('');
+
+  // Feedback Notification
   const [feedback, setFeedback] = useState({ type: '', msg: '' });
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isCssFullscreen, setIsCssFullscreen] = useState(false);
+
+  // Modals
+  const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isApiKeyOpen, setIsApiKeyOpen] = useState(false);
 
   const videoRef = useRef(null);
-  const listContainerRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const playerContainerRef = useRef(null);
 
-  // Store key to localStorage when updated
+  const showFeedback = useCallback((type, msg) => {
+    setFeedback({ type, msg });
+    setTimeout(() => {
+      setFeedback({ type: '', msg: '' });
+    }, 6000);
+  }, []);
+
+  // Update & Store API Key
   const handleKeyChange = (val) => {
     setApiKey(val);
     if (saveKey) {
@@ -234,187 +76,263 @@ export default function App() {
     }
   };
 
-  // Video handle events
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVideoFile(file);
-      localforage.setItem('sonex_videoFile', file);
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
-      setCaptions([]);
-      showFeedback('success', `Successfully loaded: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
-      
-      // Auto toggle default extraction if large file (> 25MB requires client-side extraction)
-      if (file.size > 25 * 1024 * 1024) {
-        setExtractionMethod('extract');
+  // Restore State from IndexedDB on initial mount
+  useEffect(() => {
+    async function restoreOfflineState() {
+      try {
+        const storedCaptions = await localforage.getItem('sonex_captions');
+        if (storedCaptions && Array.isArray(storedCaptions) && storedCaptions.length > 0) {
+          resetCaptions(storedCaptions);
+        }
+
+        const storedStyle = await localforage.getItem('sonex_style');
+        if (storedStyle) {
+          setStyleConfig(storedStyle);
+        }
+
+        const storedFile = await localforage.getItem('sonex_videoFile');
+        if (storedFile) {
+          setVideoFile(storedFile);
+          setVideoUrl(URL.createObjectURL(storedFile));
+        }
+      } catch (err) {
+        console.error('Failed to restore offline state:', err);
       }
+    }
+    restoreOfflineState();
+  }, [resetCaptions]);
+
+  // Auto-persist captions & styleConfig
+  useEffect(() => {
+    if (captions.length > 0) {
+      localforage.setItem('sonex_captions', captions).catch(() => {});
+    }
+  }, [captions]);
+
+  useEffect(() => {
+    localforage.setItem('sonex_style', styleConfig).catch(() => {});
+  }, [styleConfig]);
+
+  // Video File Selection Handler
+  const handleFileSelect = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('video/')) {
+      showFeedback('error', 'Please select a valid video file (MP4, MOV, WebM).');
+      return;
+    }
+
+    setVideoFile(file);
+    localforage.setItem('sonex_videoFile', file).catch(() => {});
+
+    const url = URL.createObjectURL(file);
+    setVideoUrl(url);
+    setCurrentTime(0);
+
+    showFeedback('success', `Loaded: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
+
+    // Auto toggle extraction method if file > 25MB
+    if (file.size > 25 * 1024 * 1024) {
+      setExtractionMethod('extract');
     }
   };
 
-  const handleDragOver = (e) => {
+  // Drag and drop handlers on document window
+  const handleGlobalDragOver = (e) => e.preventDefault();
+  const handleGlobalDrop = (e) => {
     e.preventDefault();
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
+    const file = e.dataTransfer?.files?.[0];
     if (file && file.type.startsWith('video/')) {
-      setVideoFile(file);
-      localforage.setItem('sonex_videoFile', file);
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
-      setCaptions([]);
-      showFeedback('success', `Dropped and loaded: ${file.name}`);
-      if (file.size > 25 * 1024 * 1024) {
-        setExtractionMethod('extract');
+      handleFileSelect(file);
+    }
+  };
+
+  // Reset Project
+  const handleResetProject = async () => {
+    if (window.confirm('Are you sure you want to reset current video and captions?')) {
+      setVideoFile(null);
+      setVideoUrl('');
+      resetCaptions([]);
+      setCurrentTime(0);
+      setVideoDuration(0);
+      await localforage.removeItem('sonex_videoFile').catch(() => {});
+      await localforage.removeItem('sonex_captions').catch(() => {});
+      showFeedback('success', 'Project cleared.');
+    }
+  };
+
+  // Seek video
+  const handleSeekVideo = (time) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+    }
+  };
+
+  // Jump to next or previous caption
+  const handlePrevCaption = () => {
+    if (captions.length === 0) return;
+    const prev = [...captions].reverse().find((c) => c.startTime < currentTime - 0.2);
+    if (prev) handleSeekVideo(prev.startTime);
+    else handleSeekVideo(captions[0].startTime);
+  };
+
+  const handleNextCaption = () => {
+    if (captions.length === 0) return;
+    const next = captions.find((c) => c.startTime > currentTime + 0.2);
+    if (next) handleSeekVideo(next.startTime);
+  };
+
+  // Global Keyboard Shortcuts
+  useKeyboardShortcuts({
+    onTogglePlay: () => {
+      if (!videoRef.current) return;
+      if (videoRef.current.paused) videoRef.current.play().catch(() => {});
+      else videoRef.current.pause();
+    },
+    onSeekBackward: (delta) => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - delta);
       }
-    } else {
-      showFeedback('error', 'Please drop a valid video file (MP4, MOV, WebM).');
-    }
-  };
+    },
+    onSeekForward: (delta) => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = Math.min(
+          videoDuration || 999999,
+          videoRef.current.currentTime + delta
+        );
+      }
+    },
+    onPrevCaption: handlePrevCaption,
+    onNextCaption: handleNextCaption,
+    onUndo: undo,
+    onRedo: redo,
+    onOpenFindReplace: () => setIsFindReplaceOpen(true),
+    onOpenShortcuts: () => setIsShortcutsOpen(true),
+  });
 
-  const showFeedback = (type, msg) => {
-    setFeedback({ type, msg });
-    setTimeout(() => {
-      setFeedback({ type: '', msg: '' });
-    }, 6000);
-  };
+  // Track video duration
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
 
-  // Extract sound track locally
-  const performAudioExtraction = async (file) => {
-    setProcessStep("Reading video raw bytes...");
-    setProcessProgress(15);
-    const arrayBuffer = await file.arrayBuffer();
+    const onLoadedMetadata = () => {
+      setVideoDuration(vid.duration || 0);
+    };
+    vid.addEventListener('loadedmetadata', onLoadedMetadata);
+    return () => vid.removeEventListener('loadedmetadata', onLoadedMetadata);
+  }, [videoUrl]);
 
-    setProcessStep("Initializing local AudioContext...");
-    setProcessProgress(30);
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    let audioCtx;
-    try {
-      audioCtx = new AudioContextClass({ sampleRate: 16000 }); // Optimize size to perfect speech rate (16kHz)
-    } catch {
-      audioCtx = new AudioContextClass();
-    }
-    if (audioCtx.state === 'suspended') {
-      await audioCtx.resume().catch(() => {});
-    }
-
-    setProcessStep("Extracting and decoding audio track (client-side)...");
-    setProcessProgress(55);
-    try {
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      setProcessStep("Encoding audio to robust mono WAV...");
-      setProcessProgress(85);
-      const wavBlob = bufferToWav(audioBuffer);
-      setProcessProgress(100);
-      return wavBlob;
-    } catch (err) {
-      console.error(err);
-      throw new Error("Client-side video audio decoding failed. Please use a smaller clip or try direct upload.", { cause: err });
-    }
-  };
-
-  // Generate captions logic using Groq API
+  // AI Transcription Handler
   const handleGenerateCaptions = async () => {
     if (!apiKey.trim()) {
-      showFeedback('error', 'Please provide a valid API Key first.');
+      showFeedback('error', 'Please provide a Groq API Key first.');
+      setIsApiKeyOpen(true);
       return;
     }
     if (!videoFile) {
-      showFeedback('error', 'Please select or drop a video file.');
+      showFeedback('error', 'Please upload or select a video file first.');
       return;
     }
 
     setIsProcessing(true);
     setProcessProgress(5);
-    
+    setProcessStep('Starting AI transcription pipeline...');
+
     try {
       let fileToSend = videoFile;
 
+      // In-browser Audio Extraction
       if (extractionMethod === 'extract') {
-        setProcessStep("Starting client-side audio extraction...");
+        setProcessStep('Extracting audio track in browser (16kHz WAV)...');
         try {
-          const audioBlob = await performAudioExtraction(videoFile);
+          const audioBlob = await performAudioExtraction(videoFile, (prog, step) => {
+            setProcessProgress(Math.round(5 + prog * 0.4));
+            setProcessStep(step);
+          });
           fileToSend = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
           showFeedback('success', `Extracted compact audio track: ${(fileToSend.size / (1024 * 1024)).toFixed(2)} MB`);
         } catch (err) {
-          showFeedback('error', err.message + ' Attempting to continue with direct file.');
+          console.warn('Audio extraction warning:', err);
+          showFeedback('error', `${err.message}. Retrying with direct file upload...`);
           fileToSend = videoFile;
         }
       }
 
-      // Check max limits for Groq API (usually 25MB)
+      // Check Groq 25MB limit
       if (fileToSend.size > 25 * 1024 * 1024) {
-        throw new Error("The target file exceeds the 25MB hard limit. Please check 'Extract audio client-side' or upload a smaller file.");
+        throw new Error(
+          'Payload exceeds 25MB limit. Please ensure "In-Browser Audio Extraction" is checked.'
+        );
       }
 
-      setProcessStep("Connecting and sending audio payload to API...");
+      setProcessStep('Sending payload to Groq Whisper LPU™...');
       setProcessProgress(50);
 
       const formData = new FormData();
       formData.append('file', fileToSend);
       formData.append('model', selectedModel);
       formData.append('response_format', 'verbose_json');
-      
-      let promptText = 'Export with standard professional subtitling punctuation and phrasing.';
-      if (selectedLanguage === 'zh') {
-        formData.append('language', 'zh');
-        promptText = '输出标准的专业字幕标点符号和语句。';
-      } else if (selectedLanguage === 'en') {
-        formData.append('language', 'en');
+
+      if (selectedLanguage && selectedLanguage !== 'auto') {
+        formData.append('language', selectedLanguage);
+      }
+
+      let promptText = customPrompt.trim();
+      if (!promptText) {
+        if (selectedLanguage === 'zh') {
+          promptText = '输出标准的专业字幕标点符号和语句。';
+        } else {
+          promptText = 'Export with standard professional subtitling punctuation and phrasing.';
+        }
       }
       formData.append('prompt', promptText);
 
-      const response = await fetchWithBackoff('https://api.groq.com/openai/v1/audio/transcriptions', {
+      const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey.trim()}`,
         },
-        body: formData
+        body: formData,
       });
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `API responded with code: ${response.status}`);
+        throw new Error(errJson.error?.message || `API error (${response.status})`);
       }
 
-      setProcessStep("Processing output returned from API...");
-      setProcessProgress(90);
+      setProcessStep('Structuring sentences & formatting timestamps...');
+      setProcessProgress(88);
 
       const resJson = await response.json();
       if (!resJson.segments || !Array.isArray(resJson.segments)) {
-        throw new Error("API succeeded but did not return any time-segmented transcription blocks.");
+        throw new Error('API returned successfully but no transcription segments were found.');
       }
 
-      // Post-process to break long segments into short chunks for Shorts/Reels format
-      let refinedSegments = [];
-      resJson.segments.forEach(seg => {
-        let text = seg.text.trim();
+      // Intelligent post-processing: split long segments into punchy social media subtitle chunks
+      const refinedSegments = [];
+      resJson.segments.forEach((seg) => {
+        const text = seg.text.trim();
         if (!text) return;
-        
+
         // Split by standard punctuation to keep ideas grouped
         const chunks = text.match(/(.*?[，。？！,.?!；;]+|.+)/g) || [text];
-        
         const finalChunks = [];
-        chunks.forEach(chunk => {
-          let c = chunk.trim();
+
+        chunks.forEach((chunk) => {
+          const c = chunk.trim();
           if (!c) return;
           const hasChinese = /[\u4e00-\u9fa5]/.test(c);
-          const maxLen = hasChinese ? 14 : 26; // Increased English limit to allow more words per line
-          
+          const maxLen = hasChinese ? 14 : 26;
+
           if (c.length <= maxLen) {
-            if (c) finalChunks.push(c);
+            finalChunks.push(c);
           } else {
             if (hasChinese) {
-              // Chinese can be split at any character
               const parts = Math.ceil(c.length / maxLen);
               const splitLen = Math.ceil(c.length / parts);
               for (let i = 0; i < c.length; i += splitLen) {
                 finalChunks.push(c.substring(i, i + splitLen));
               }
             } else {
-              // English must be split exactly at word boundaries for Reels style
               const words = c.split(/\s+/);
               let currentChunk = '';
               for (let word of words) {
@@ -432,907 +350,203 @@ export default function App() {
 
         const totalChars = finalChunks.reduce((acc, c) => acc + c.length, 0);
         const duration = seg.end - seg.start;
-        let currentTime = seg.start;
+        let segTime = seg.start;
 
-        finalChunks.forEach(chunk => {
+        finalChunks.forEach((chunk) => {
           const chunkDuration = totalChars > 0 ? (chunk.length / totalChars) * duration : duration;
-          
-          // Clean up the text by stripping ending punctuation (looks much nicer on short videos)
           const cleanText = chunk.replace(/[，。？！,.?!；;]+$/, '').trim();
-          
+
           if (cleanText) {
             refinedSegments.push({
-              start: currentTime,
-              end: currentTime + chunkDuration,
-              text: cleanText
+              start: segTime,
+              end: segTime + chunkDuration,
+              text: cleanText,
             });
           }
-          currentTime += chunkDuration;
+          segTime += chunkDuration;
         });
       });
 
-      // Convert segments directly into structured SRT formats
+      // Construct structured caption blocks
       const parsed = refinedSegments.map((seg, index) => {
-        let text = getWrappedText(seg.text);
-
         return {
           id: index + 1,
           startTime: seg.start,
           endTime: seg.end,
           startStr: secondsToTimeStr(seg.start),
           endStr: secondsToTimeStr(seg.end),
-          text: text
+          text: getWrappedText(seg.text),
         };
       });
 
       setCaptions(parsed);
       setProcessProgress(100);
       showFeedback('success', `Generated ${parsed.length} accurate captions successfully!`);
+
+      // Switch to Studio tab immediately for editing
+      setActiveTab('studio');
     } catch (err) {
       console.error(err);
-      showFeedback('error', err.message);
+      showFeedback('error', err.message || 'Transcription failed.');
     } finally {
       setIsProcessing(false);
       setProcessStep('');
     }
   };
-
-  // Offset shifting logic
-  const handleApplyShift = () => {
-    if (captions.length === 0) return;
-    const shift = parseFloat(timeOffset);
-    if (isNaN(shift) || shift === 0) return;
-
-    const updated = captions.map(cap => {
-      let newStart = Math.max(0, cap.startTime + shift);
-      let newEnd = Math.max(0, cap.endTime + shift);
-      return {
-        ...cap,
-        startTime: newStart,
-        endTime: newEnd,
-        startStr: secondsToTimeStr(newStart),
-        endStr: secondsToTimeStr(newEnd)
-      };
-    });
-
-    setCaptions(updated);
-    setTimeOffset(0);
-    showFeedback('success', `Shifted all caption timestamps by ${shift > 0 ? '+' : ''}${shift} seconds.`);
-  };
-
-  // Editing logic
-  const handleStartEdit = (cap) => {
-    setEditCapId(cap.id);
-    setEditText(cap.text);
-  };
-
-  const handleSaveEdit = (id) => {
-    setCaptions(prev => prev.map(cap => cap.id === id ? { ...cap, text: editText } : cap));
-    setEditCapId(null);
-  };
-
-  // Fix native fullscreen hijacking & fallback for devices without native Element.requestFullscreen (iOS)
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isFs = !!document.fullscreenElement;
-      setIsFullscreen(isFs);
-
-      if (document.fullscreenElement === videoRef.current) {
-        if (document.exitFullscreen) {
-          document.exitFullscreen().then(() => {
-            if (playerContainerRef.current?.requestFullscreen) {
-              playerContainerRef.current.requestFullscreen().catch(() => setIsCssFullscreen(true));
-            } else {
-              setIsCssFullscreen(true);
-            }
-          }).catch(e => console.error(e));
-        }
-      }
-    };
-    
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-    };
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(e => console.error(e));
-      setIsCssFullscreen(false);
-    } else if (isCssFullscreen) {
-      setIsCssFullscreen(false);
-    } else if (playerContainerRef.current?.requestFullscreen) {
-      playerContainerRef.current.requestFullscreen().catch(() => {
-        setIsCssFullscreen(true);
-      });
-    } else {
-      setIsCssFullscreen(!isCssFullscreen);
-    }
-  };
-
-  const lastActiveIdRef = useRef(null);
-
-  // Auto scroll caption list inside container only (never scrolls parent window)
-  useEffect(() => {
-    if (!autoScrollEnabled) return;
-    const active = captions.find(cap => currentTime >= cap.startTime && currentTime <= cap.endTime);
-    if (active && active.id !== lastActiveIdRef.current) {
-      lastActiveIdRef.current = active.id;
-      const element = document.getElementById(`cap-block-${active.id}`);
-      if (element && listContainerRef.current) {
-        const container = listContainerRef.current;
-        const elementTop = element.offsetTop;
-        const elementHeight = element.offsetHeight;
-        const containerHeight = container.clientHeight;
-        const currentScroll = container.scrollTop;
-
-        if (elementTop < currentScroll || (elementTop + elementHeight) > (currentScroll + containerHeight)) {
-          container.scrollTo({
-            top: Math.max(0, elementTop - containerHeight / 2 + elementHeight / 2),
-            behavior: 'smooth'
-          });
-        }
-      }
-    } else if (!active) {
-      lastActiveIdRef.current = null;
-    }
-  }, [currentTime, captions, autoScrollEnabled]);
-
-  // Download logic (UTF-8, No BOM as requested)
-  const handleDownloadSRT = () => {
-    if (captions.length === 0) return;
-    const finalSrtContent = formatSRT(captions);
-    const blob = new Blob([finalSrtContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    const cleanName = videoFile ? videoFile.name.substring(0, videoFile.name.lastIndexOf('.')) : 'captions';
-    a.download = `${cleanName}_Sonex.srt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showFeedback('success', 'SRT Captions file successfully generated and saved!');
-  };
-
-  // Burn subtitles into video directly using FFmpeg.wasm
-  const handleBurnSubtitles = async () => {
-    if (!videoFile || captions.length === 0) return;
-    setIsProcessing(true);
-    setProcessStep("Loading FFmpeg Video Engine...");
-    setProcessProgress(5);
-
-    try {
-      const ffmpeg = new FFmpeg();
-      
-      ffmpeg.on('progress', ({ progress }) => {
-        setProcessProgress(Math.max(10, Math.floor(progress * 100)));
-      });
-
-      // Load bundled core from our own static server (bypasses unpkg blockers entirely)
-      const baseURL = window.location.origin;
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
-      });
-
-      setProcessStep("Preparing video & subtitles in virtual file system...");
-      setProcessProgress(15);
-
-      const ext = videoFile.name ? videoFile.name.split('.').pop() : 'mp4';
-      const inputName = `input.${ext}`;
-      await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
-      
-      const srtContent = formatSRT(captions, true);
-      const srtBlob = new Blob([srtContent], { type: 'text/plain' });
-      await ffmpeg.writeFile('subs.srt', await fetchFile(srtBlob));
-
-      setProcessStep("Loading fonts for subtitle rendering...");
-      await ffmpeg.createDir('/fonts');
-      await ffmpeg.writeFile('/fonts/font.ttf', await fetchFile(`${baseURL}/font.ttf`));
-
-      setProcessStep("Rendering social media ready video (this may take a while)...");
-      setProcessProgress(20);
-
-      ffmpeg.on('log', ({ message }) => {
-        console.log('[FFmpeg]', message);
-      });
-
-      // Burn the subtitles directly into the video frames (hard subs)
-      const execCode = await ffmpeg.exec([
-        '-i', inputName,
-        '-vf', "subtitles=subs.srt:fontsdir=/fonts:force_style='PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1.8,Shadow=2.5,BackColour=&H00000000,MarginV=85,Alignment=2,FontSize=24,Bold=1'",
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-c:a', 'copy',
-        'output.mp4'
-      ]);
-
-      if (execCode !== 0) {
-        throw new Error(`FFmpeg processing failed (code ${execCode}). See console for details.`);
-      }
-
-      setProcessStep("Finalizing video export...");
-      setProcessProgress(99);
-
-      const data = await ffmpeg.readFile('output.mp4');
-      const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
-      const exportUrl = URL.createObjectURL(videoBlob);
-      
-      const a = document.createElement('a');
-      a.href = exportUrl;
-      const cleanName = videoFile.name ? videoFile.name.substring(0, videoFile.name.lastIndexOf('.')) : 'export';
-      a.download = `${cleanName}_Subtitled.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(exportUrl);
-
-      // Download SRT alongside the video
-      const finalSrtContent = formatSRT(captions);
-      const srtBlobObj = new Blob([finalSrtContent], { type: 'text/plain;charset=utf-8' });
-      const srtUrl = URL.createObjectURL(srtBlobObj);
-      const srtA = document.createElement('a');
-      srtA.href = srtUrl;
-      srtA.download = `${cleanName}_Sonex.srt`;
-      document.body.appendChild(srtA);
-      srtA.click();
-      document.body.removeChild(srtA);
-      URL.revokeObjectURL(srtUrl);
-
-      showFeedback('success', 'Video and Captions successfully downloaded!');
-    } catch (err) {
-      console.error(err);
-      const errMsg = err?.message || (typeof err === 'string' ? err : 'Unknown FFmpeg execution error');
-      showFeedback('error', 'Failed to render subtitles: ' + errMsg);
-    } finally {
-      setIsProcessing(false);
-      setProcessStep('');
-    }
-  };
-
-  // Highlight matches in list
-  const filteredCaptions = captions.filter(cap => 
-    cap.text.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-emerald-500 selection:text-black">
-      
-      {/* Top Header / Branding */}
-      <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 overflow-hidden rounded-xl shadow-lg shadow-emerald-500/10">
-              <img src="/logo.png" alt="Sonex Logo" className="w-10 h-10 object-cover" />
-            </div>
-            <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                Sonex Caption Master
-              </h1>
-              <p className="text-xs text-zinc-400">Generate, customize & clean up video speech captions instantaneously</p>
-            </div>
-          </div>
-          
-          {/* Global Alert / Toast Notifications */}
-          {feedback.msg && (
-            <div className={`px-4 py-2.5 rounded-xl text-sm border flex items-center gap-2 max-w-full sm:max-w-md break-words animate-fade-in ${
-              feedback.type === 'success' 
-                ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 shadow-lg shadow-emerald-500/5' 
-                : 'bg-rose-950/40 text-rose-300 border-rose-800/60 shadow-lg shadow-rose-500/5'
-            }`}>
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${feedback.type === 'success' ? 'bg-emerald-400' : 'bg-rose-400'} animate-pulse`} />
-              <span className="break-words leading-tight">{feedback.msg}</span>
-            </div>
-          )}
-        </div>
-      </header>
+    <div
+      onDragOver={handleGlobalDragOver}
+      onDrop={handleGlobalDrop}
+      className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-emerald-500 selection:text-black flex flex-col"
+    >
+      {/* Toast Alert */}
+      <Toast feedback={feedback} onClose={() => setFeedback({ type: '', msg: '' })} />
+
+      {/* Header */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        captionsCount={captions.length}
+        videoFile={videoFile}
+        apiKey={apiKey}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        onOpenImport={() => setIsImportOpen(true)}
+        onResetProject={handleResetProject}
+        onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
+      />
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left Side: Setup, Video Player, controls */}
-        <section className="lg:col-span-7 space-y-6 lg:sticky lg:top-4 h-fit">
-          
-          {/* Box 1: Configuration & API Key */}
-          {!envApiKey && (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-400 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  1. API Authorization
-                </h2>
-                <label className="flex items-center gap-2 text-xs text-zinc-500 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={saveKey} 
-                    onChange={(e) => {
-                      setSaveKey(e.target.checked);
-                      if (!e.target.checked) localStorage.removeItem('groq_api_key');
-                    }}
-                    className="rounded bg-zinc-950 border-zinc-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900"
-                  />
-                  Remember key in this browser
-                </label>
-              </div>
-              
-              <div className="relative">
-                <input
-                  type="password"
-                  placeholder="gsk_..."
-                  value={apiKey}
-                  onChange={(e) => handleKeyChange(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all font-mono"
-                />
-                <span className="absolute right-3 top-3 text-[10px] bg-zinc-800 text-emerald-400 px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold">
-                  API SECURE
-                </span>
-              </div>
-              <p className="text-xs text-zinc-500">
-                Your API keys are never stored on external servers. All connections occur directly inside your browser to the high-speed endpoint.
-              </p>
-            </div>
-          )}
-
-          {/* Box 2: Drag & Drop Media Upload Area */}
-          {captions.length === 0 && (
-            <div 
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
-                videoFile 
-                  ? 'border-emerald-500/40 bg-emerald-500/[0.02]' 
-                  : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/20'
-              }`}
-              onClick={() => fileInputRef.current.click()}
-            >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept="video/mp4, video/quicktime, video/webm" 
-                className="hidden" 
+      <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+        {/* TAB 1: STUDIO (Video Player + Timeline + Subtitle Block Editor) */}
+        {activeTab === 'studio' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column: Player & Interactive Timeline */}
+            <div className="lg:col-span-7 space-y-4 lg:sticky lg:top-20">
+              <VideoPlayer
+                videoRef={videoRef}
+                videoUrl={videoUrl}
+                videoFile={videoFile}
+                captions={captions}
+                currentTime={currentTime}
+                setCurrentTime={setCurrentTime}
+                styleConfig={styleConfig}
+                videoAspectRatio={videoAspectRatio}
+                setVideoAspectRatio={setVideoAspectRatio}
+                onFileSelect={handleFileSelect}
               />
-              
-              <div className="max-w-md mx-auto space-y-3">
-                <div className="mx-auto w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-zinc-200">
-                    {videoFile ? videoFile.name : 'Drag & Drop Video here, or click to browse'}
-                  </p>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Supports MP4, MOV, and WebM video containers
-                  </p>
-                </div>
 
-                {videoFile && (
-                  <div className="inline-flex items-center gap-2 bg-zinc-800 text-zinc-300 px-3 py-1 rounded-full text-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Box 3: Model Selector, Extraction Mode Switch & Captions Generator Action */}
-          {videoFile && (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <h2 className="text-sm font-semibold tracking-wide uppercase text-zinc-400 flex items-center gap-2">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                </svg>
-                2. Transcription Settings
-              </h2>
-
-              {/* Model Choice */}
-              <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400 font-semibold">Select Whisper Model</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedModel('whisper-large-v3')}
-                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-left transition-all ${
-                      selectedModel === 'whisper-large-v3'
-                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="font-bold text-sm">Pro Max</div>
-                    <div className="text-[10px] text-zinc-500 mt-1">Maximum accuracy & multilingual support. The ultimate transcription model.</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedModel('whisper-large-v3-turbo')}
-                    className={`px-3 py-2 text-xs rounded-xl font-medium border text-left transition-all ${
-                      selectedModel === 'whisper-large-v3-turbo'
-                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="font-bold text-sm">Pro</div>
-                    <div className="text-[10px] text-zinc-500 mt-1">Blazing speeds & responsive translation for rapid processing.</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Language Choice */}
-              <div className="space-y-1.5 mt-4">
-                <label className="text-xs text-zinc-400 font-semibold">Video Language</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLanguage('auto')}
-                    className={`px-1.5 sm:px-3 py-2 text-[11px] sm:text-xs rounded-xl font-medium border text-center transition-all truncate ${
-                      selectedLanguage === 'auto'
-                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    Auto Detect
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLanguage('en')}
-                    className={`px-1.5 sm:px-3 py-2 text-[11px] sm:text-xs rounded-xl font-medium border text-center transition-all truncate ${
-                      selectedLanguage === 'en'
-                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    English
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLanguage('zh')}
-                    className={`px-1.5 sm:px-3 py-2 text-[11px] sm:text-xs rounded-xl font-medium border text-center transition-all truncate ${
-                      selectedLanguage === 'zh'
-                        ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700'
-                    }`}
-                  >
-                    Chinese (中文)
-                  </button>
-                </div>
-              </div>
-
-              {!isProcessing ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateCaptions}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black py-3.5 px-6 rounded-xl font-bold tracking-wide shadow-xl shadow-emerald-950/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Generate Captions
-                </button>
-              ) : (
-                <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-800 rounded-xl mt-4">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-emerald-400 font-semibold animate-pulse">
-                      {processStep || 'Processing... Please wait'}
-                    </span>
-                    <span className="text-zinc-500">{processProgress}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-zinc-850 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-emerald-500 transition-all duration-300"
-                      style={{ width: `${processProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-zinc-500 text-center italic">
-                    Note: Audio transcription takes roughly 2-5 seconds on the server. Keep this page open.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Box 4: Interactive Video Preview Player */}
-          {videoUrl && (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                Media Preview & Player
-              </h3>
-              <div ref={playerContainerRef} className={`relative rounded-xl overflow-hidden bg-black border border-zinc-800 group flex justify-center items-center ${
-                isFullscreen || isCssFullscreen 
-                  ? 'fixed inset-0 z-50 w-screen h-screen rounded-none border-none bg-black' 
-                  : 'h-[55vh] min-h-[240px] sm:min-h-[340px] md:min-h-[400px] max-h-[700px]'
-              }`}>
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  controls
-                  playsInline
-                  webkit-playsinline="true"
-                  controlsList="nofullscreen"
-                  className="h-full w-auto object-contain max-w-full"
-                  onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-                  onLoadedMetadata={(e) => {
-                    const { videoWidth, videoHeight } = e.target;
-                    if (videoWidth && videoHeight) {
-                      setVideoAspectRatio(`${videoWidth}/${videoHeight}`);
-                    }
+              {videoUrl && (
+                <VisualTimeline
+                  captions={captions}
+                  currentTime={currentTime}
+                  duration={videoDuration}
+                  onSeek={handleSeekVideo}
+                  onSelectCaption={(id) => {
+                    const el = document.getElementById(`cap-card-${id}`);
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                   }}
                 />
-                
-                {/* Custom Fullscreen Button that preserves overlays */}
-                <button
-                  type="button"
-                  onClick={toggleFullscreen}
-                  className="absolute top-4 right-4 bg-black/70 hover:bg-black text-white p-2.5 sm:p-2 rounded-lg transition-opacity z-10 shadow-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
-                  title="Fullscreen with Captions"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                </button>
-                
-                {/* On-screen visual subtitle layer to test visual flow */}
-                {captions.length > 0 && (
-                  <div 
-                    className="absolute pointer-events-none flex justify-center"
-                    style={{ 
-                      aspectRatio: videoAspectRatio,
-                      height: '100%',
-                      maxWidth: '100%'
-                    }}
-                  >
-                    <div className={`absolute left-4 right-4 text-center drop-shadow-[0_6px_12px_rgba(0,0,0,1)] ${
-                      (isFullscreen || isCssFullscreen) ? 'bottom-28 md:bottom-36' : 'bottom-16 sm:bottom-20 md:bottom-24'
-                    }`}>
-                      {captions.map((cap) => {
-                        if (currentTime >= cap.startTime && currentTime <= cap.endTime) {
-                          return (
-                            <span key={cap.id} 
-                                  className={`text-white font-black inline-block break-words whitespace-pre-wrap leading-[1.5] ${
-                                    (isFullscreen || isCssFullscreen)
-                                      ? 'text-3xl md:text-4xl max-w-[90%] md:max-w-2xl'
-                                      : 'text-lg sm:text-xl md:text-2xl max-w-[92%] md:max-w-lg'
-                                  }`}
-                                  style={{
-                                    textShadow: (isFullscreen || isCssFullscreen)
-                                      ? SMOOTH_OUTLINE_FULLSCREEN
-                                      : SMOOTH_OUTLINE_NORMAL
-                                  }}>
-                              {getWrappedText(cap.text)}
-                            </span>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          )}
 
-          {/* Quick instructions / tips box */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 space-y-3">
-            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-              Pro workflow for Sonex:
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-zinc-400">
-              <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
-                <div className="text-zinc-300 font-bold mb-1">Step 1</div>
-                Generate and edit captions using this web app.
-              </div>
-              <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
-                <div className="text-zinc-300 font-bold mb-1">Step 2</div>
-                Click the prominent green download button below.
-              </div>
-              <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
-                <div className="text-zinc-300 font-bold mb-1">Step 3</div>
-                In your video editor: Go to <span className="text-zinc-200 font-semibold">Text</span> &rarr; <span className="text-zinc-200 font-semibold">Local Captions</span>.
-              </div>
-              <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
-                <div className="text-zinc-300 font-bold mb-1">Step 4</div>
-                Click <span className="text-zinc-200 font-semibold">Import</span> and load the generated .srt file.
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Upload Area for New Video */}
-          {captions.length > 0 && (
-            <div 
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              className="border-2 border-dashed border-zinc-800 hover:border-emerald-500/50 bg-zinc-900/20 hover:bg-emerald-500/5 rounded-2xl p-6 text-center transition-all cursor-pointer"
-              onClick={() => fileInputRef.current.click()}
-            >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept="video/mp4, video/quicktime, video/webm" 
-                className="hidden" 
+            {/* Right Column: Caption List Editor */}
+            <div className="lg:col-span-5 h-[calc(100vh-120px)] min-h-[500px]">
+              <CaptionList
+                captions={captions}
+                setCaptions={setCaptions}
+                currentTime={currentTime}
+                onSeek={handleSeekVideo}
+                onOpenFindReplace={() => setIsFindReplaceOpen(true)}
+                autoScrollEnabled={autoScrollEnabled}
+                setAutoScrollEnabled={setAutoScrollEnabled}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={undo}
+                onRedo={redo}
+                showFeedback={showFeedback}
               />
-              
-              <div className="max-w-md mx-auto space-y-3">
-                <div className="mx-auto w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-zinc-200">
-                    Upload a new video
-                  </p>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Drag & Drop Video here, or click to browse
-                  </p>
-                </div>
-              </div>
             </div>
-          )}
-        </section>
-
-        {/* Right Side: Caption Editor & Export Tools */}
-        <section className="lg:col-span-5 flex flex-col lg:h-[calc(100vh-140px)] h-[550px] lg:min-h-[500px]">
-          
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 flex flex-col h-full space-y-4">
-            
-            {/* Download SRT Button block */}
-            {captions.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                <button
-                  type="button"
-                  onClick={handleDownloadSRT}
-                  className="group relative w-full py-3.5 px-6 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] text-black font-extrabold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(16,185,129,0.15)] hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all duration-300 transform hover:-translate-y-0.5 text-base overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
-                  <svg className="w-5 h-5 stroke-current fill-none stroke-2 relative z-10" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  <span className="relative z-10">Download SRT File</span>
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="group relative w-full py-3.5 px-6 bg-zinc-900/50 text-emerald-400/50 font-bold tracking-wide text-center rounded-xl flex items-center justify-center gap-3 border border-emerald-500/20 text-base overflow-hidden cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5 text-emerald-500/50 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  <span className="relative z-10">Render for Social Media (coming)</span>
-                </button>
-              </div>
-            ) : (
-              <div className="p-4 bg-zinc-950 border border-dashed border-zinc-800 rounded-xl text-center text-xs text-zinc-500">
-                No captions generated yet. Fill in your API Key and upload a video to generate captions.
-              </div>
-            )}
-
-            {/* Timestamps Global Offset Adjuster */}
-            {captions.length > 0 && (
-              <div className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-zinc-400">Shift Timestamps (Seconds)</label>
-                  <span className="text-[10px] text-zinc-500">Fix out of sync audio</span>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="0.1"
-                    inputMode="decimal"
-                    pattern="[0-9.-]*"
-                    placeholder="-1.5 or 0.5"
-                    value={timeOffset || ''}
-                    onChange={(e) => setTimeOffset(parseFloat(e.target.value) || 0)}
-                    className="flex-1 bg-zinc-900 border border-zinc-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyShift}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs px-3.5 py-1.5 rounded-lg transition-all font-semibold"
-                  >
-                    Apply Offset
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Captions search bar / counters */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-bold text-zinc-300">
-                  Captions List ({filteredCaptions.length})
-                </h3>
-                {captions.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setAutoScrollEnabled(!autoScrollEnabled)}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors flex items-center gap-1.5 ${
-                      autoScrollEnabled
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                        : 'bg-zinc-850 text-zinc-400 border-zinc-700 hover:text-zinc-200'
-                    }`}
-                    title="Toggle auto-scrolling transcript with video playback"
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${autoScrollEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
-                    {autoScrollEnabled ? 'Auto-Sync ON' : 'Auto-Sync OFF'}
-                  </button>
-                )}
-              </div>
-
-              {captions.length > 0 && (
-                <input
-                  type="text"
-                  placeholder="Search word..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-32 focus:w-44 transition-all"
-                />
-              )}
-            </div>
-
-            {/* Captions scrollable list */}
-            <div 
-              ref={listContainerRef}
-              className="flex-1 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar"
-            >
-              {filteredCaptions.map((cap) => {
-                const isActive = currentTime >= cap.startTime && currentTime <= cap.endTime;
-                const isEditing = editCapId === cap.id;
-
-                return (
-                  <div
-                    key={cap.id}
-                    id={`cap-block-${cap.id}`}
-                    onClick={() => {
-                      if (videoRef.current && !isEditing) {
-                        videoRef.current.currentTime = cap.startTime;
-                      }
-                    }}
-                    className={`p-3.5 rounded-xl transition-all border cursor-pointer ${
-                      isActive 
-                        ? 'bg-emerald-500/10 border-emerald-500 shadow-md shadow-emerald-500/5' 
-                        : 'bg-zinc-950 hover:bg-zinc-900 border-zinc-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono bg-zinc-850 px-1.5 py-0.5 rounded text-zinc-300">
-                          #{cap.id}
-                        </span>
-                        <span className={`font-mono ${isActive ? 'text-emerald-400 font-bold' : ''}`}>
-                          {cap.startStr} &rarr; {cap.endStr}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5">
-                        {isEditing ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSaveEdit(cap.id);
-                              }}
-                              onTouchEnd={(e) => {
-                                e.stopPropagation();
-                                handleSaveEdit(cap.id);
-                              }}
-                              className="text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded bg-emerald-950/60 text-xs font-semibold"
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditCapId(null);
-                              }}
-                              onTouchEnd={(e) => {
-                                e.stopPropagation();
-                                setEditCapId(null);
-                              }}
-                              className="text-zinc-400 hover:text-zinc-200 px-2 py-1 text-xs"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartEdit(cap);
-                            }}
-                            onTouchEnd={(e) => {
-                              e.stopPropagation();
-                              handleStartEdit(cap);
-                            }}
-                            className="text-zinc-500 hover:text-zinc-300 p-2 sm:p-1.5 rounded-lg hover:bg-zinc-800 min-w-[36px] min-h-[36px] flex items-center justify-center transition-colors"
-                            title="Edit this block"
-                          >
-                            <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {isEditing ? (
-                      <textarea
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none font-medium h-20"
-                      />
-                    ) : (
-                      <p className={`text-sm leading-relaxed ${isActive ? 'text-white font-medium' : 'text-zinc-300'}`}>
-                        {cap.text}
-                      </p>
-                    )}
-
-                    {/* CapCut layout preview guideline indicator */}
-                    {!isEditing && cap.text.length > 42 && (
-                      <div className="mt-1.5 text-[10px] text-amber-500/80 flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <span>Exceeds optimal length (~42 chars). Text will wrap automatically on import.</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {captions.length > 0 && filteredCaptions.length === 0 && (
-                <div className="py-12 text-center text-zinc-500 text-sm">
-                  No matching words found for search query "{searchQuery}".
-                </div>
-              )}
-
-              {captions.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full py-16 text-zinc-600">
-                  <svg className="w-10 h-10 mb-2 stroke-current opacity-40" fill="none" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <p className="text-xs">Your transcriptions will appear in this sidebar panel.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom info stats bar */}
-            {captions.length > 0 && (
-              <div className="pt-3 border-t border-zinc-850 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-                <span>Total Dur: {secondsToTimeStr(captions[captions.length - 1].endTime)}</span>
-                <span>Blocks: {captions.length}</span>
-                <span className="flex items-center gap-1 text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Sonex Ready
-                </span>
-              </div>
-            )}
-
           </div>
-        </section>
-        
+        )}
+
+        {/* TAB 2: STYLES & PRESETS */}
+        {activeTab === 'style' && (
+          <StyleConfigurator
+            styleConfig={styleConfig}
+            setStyleConfig={setStyleConfig}
+            showFeedback={showFeedback}
+          />
+        )}
+
+        {/* TAB 3: AI TRANSCRIBE */}
+        {activeTab === 'transcribe' && (
+          <TranscriptionSettings
+            apiKey={apiKey}
+            onKeyChange={handleKeyChange}
+            saveKey={saveKey}
+            setSaveKey={setSaveKey}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            selectedLanguage={selectedLanguage}
+            setSelectedLanguage={setSelectedLanguage}
+            extractionMethod={extractionMethod}
+            setExtractionMethod={setExtractionMethod}
+            customPrompt={customPrompt}
+            setCustomPrompt={setCustomPrompt}
+            isProcessing={isProcessing}
+            processStep={processStep}
+            processProgress={processProgress}
+            onGenerateCaptions={handleGenerateCaptions}
+            videoFile={videoFile}
+          />
+        )}
+
+        {/* TAB 4: EXPORT & HARD-SUB BURN */}
+        {activeTab === 'export' && (
+          <ExportPanel
+            videoFile={videoFile}
+            captions={captions}
+            styleConfig={styleConfig}
+            showFeedback={showFeedback}
+          />
+        )}
       </main>
-      
-      {/* Footer Info */}
-      <footer className="border-t border-zinc-900 bg-zinc-950 py-8 text-center text-xs text-zinc-600 mt-12 space-y-1">
-        <p>Built exclusively for rapid video subtitling workflows. All formatting matches exact local text importing engines.</p>
-        <p>&copy; 2026 Sonex Workspace. Local offline audio extraction.</p>
+
+      {/* Modals */}
+      <BatchFindReplaceModal
+        isOpen={isFindReplaceOpen}
+        onClose={() => setIsFindReplaceOpen(false)}
+        captions={captions}
+        setCaptions={setCaptions}
+        showFeedback={showFeedback}
+      />
+
+      <ImportSubtitleModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        setCaptions={setCaptions}
+        showFeedback={showFeedback}
+      />
+
+      <KeyboardShortcutModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      <ApiKeyModal
+        isOpen={isApiKeyOpen}
+        onClose={() => setIsApiKeyOpen(false)}
+        apiKey={apiKey}
+        onKeyChange={handleKeyChange}
+        saveKey={saveKey}
+        setSaveKey={setSaveKey}
+        showFeedback={showFeedback}
+      />
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-900 bg-zinc-950 py-4 text-center text-[11px] text-zinc-500 mt-auto">
+        <p>Sonex Studio Pro &copy; 2026. High-performance offline audio extraction & AI speech transcription.</p>
       </footer>
     </div>
   );
